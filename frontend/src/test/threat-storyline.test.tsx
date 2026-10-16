@@ -174,6 +174,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Threat Storyline', () => {
+  it('loads a production-boundary Unicode event into the selector', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json({ items: [{ ...event, summary: '😀'.repeat(500) }], total: 1, limit: 20, offset: 0 }));
+    renderWithProviders(
+      <Routes><Route path="/intelligence/storyline" element={<ThreatStorylinePage />} /></Routes>,
+      ['/intelligence/storyline'],
+    );
+    expect(await screen.findByRole('option', { name: 'PowerShell campaign T1059.001' })).toBeInTheDocument();
+    expect(screen.queryByText('Unable to load data')).not.toBeInTheDocument();
+  });
+
   it('renders real evidence, chronology, risk rationale, and safe pivots', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const path = String(input);
@@ -206,5 +216,28 @@ describe('Threat Storyline', () => {
   it('rejects arbitrary fields from the storyline contract', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => json({ ...storyline, raw_reference: { secret: true } }));
     await expect(api.intelligenceStoryline('cti-1')).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
+  it('renders supported limited evidence without a connection error', async () => {
+    const limited = {
+      ...storyline,
+      risk_factors: [],
+      risk_context: { source_count: null, correlation_count: null },
+      evidence_counts: { observables: 0, entities: 0, relationships: 0, correlations: 0, attack_mappings: 0 },
+      observables: [], entities: [], relationships: [], correlations: [],
+      attack: { ...storyline.attack, techniques: [] },
+      milestones: [storyline.milestones[0]],
+      limitations: ['chronology_not_causality'],
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).includes('/intelligence/events?')
+      ? json({ items: [event], total: 1, limit: 20, offset: 0 })
+      : json(limited));
+    renderWithProviders(
+      <Routes><Route path="/intelligence/storyline/:eventId" element={<ThreatStorylinePage />} /></Routes>,
+      ['/intelligence/storyline/cti-1'],
+    );
+    expect(await screen.findByText('No recorded risk factors are available for this event.')).toBeInTheDocument();
+    expect(screen.getByText('No recorded correlations exist for this event.')).toBeInTheDocument();
+    expect(screen.queryByText('Unable to load data')).not.toBeInTheDocument();
   });
 });

@@ -29,7 +29,7 @@ from backend.app.db.models import (
     ThreatEvent,
     User,
 )
-from backend.app.core.security import hash_password
+from backend.app.core.security import hash_password, verify_password
 
 DEMO_EVENTS = {
     "external": "demo-external-0001",
@@ -212,7 +212,40 @@ def seed_defense_demo(session: Session) -> None:
     session.commit()
 
 
-def seed_configured_defense_demo() -> None:
+def ensure_defense_demo(session: Session) -> str:
+    """Seed an empty demo or verify the complete existing fixture without changing it."""
+    if session.scalar(select(ThreatEvent.id).limit(1)) is None:
+        seed_defense_demo(session)
+        return "seeded"
+
+    missing_events = [event_id for event_id in DEMO_EVENTS.values() if session.get(ThreatEvent, event_id) is None]
+    if missing_events:
+        raise ValueError("Existing isolated demo database is incomplete; refusing to modify it")
+
+    users = {
+        user.username: user
+        for user in session.scalars(select(User).where(User.username.in_(
+            [account[0] for account in DEMO_ACCOUNTS.values()]
+        )))
+    }
+    for role, (username, password) in DEMO_ACCOUNTS.items():
+        user = users.get(username)
+        if user is None or user.role != role or not user.is_active or not verify_password(password, user.password_hash):
+            raise ValueError("Existing isolated demo accounts do not match the configured defense fixture")
+
+    required_records = (
+        session.get(EnrichmentRecord, "00000000-0000-4000-8000-000000000701"),
+        session.get(OutlierSessionRecord, "demo-outlier-web-session-0001"),
+        session.get(PipelineRun, "00000000-0000-4000-8000-000000000801"),
+        session.get(PipelineRun, "00000000-0000-4000-8000-000000000802"),
+        session.get(AuditLog, "00000000-0000-4000-8000-000000000901"),
+    )
+    if any(record is None for record in required_records):
+        raise ValueError("Existing isolated demo database is incomplete; refusing to modify it")
+    return "already_present"
+
+
+def seed_configured_defense_demo() -> str:
     """Seed only the explicitly named isolated Compose database."""
     from backend.app.core.config import get_settings
     from backend.app.db.database import SessionLocal, initialize_database
@@ -224,7 +257,8 @@ def seed_configured_defense_demo() -> None:
         raise RuntimeError("Refusing to seed a database outside the isolated ACTIT defense demo")
     initialize_database()
     with SessionLocal() as session:
-        seed_defense_demo(session)
+        result = ensure_defense_demo(session)
+    return result
 
 
 def create_disposable_demo() -> Path:
@@ -247,7 +281,7 @@ if __name__ == "__main__":
     parser.add_argument("--configured-defense-demo", action="store_true")
     arguments = parser.parse_args()
     if arguments.configured_defense_demo:
-        seed_configured_defense_demo()
-        print("isolated defense demo seeded")
+        result = seed_configured_defense_demo()
+        print(f"isolated defense demo {result}")
     else:
         print(create_disposable_demo())

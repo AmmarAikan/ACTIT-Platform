@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, clearToken, MANUAL_PREVIEW_TIMEOUT_MS } from '../api/client';
+import { api, clearToken, INTERNAL_HEALTH_TIMEOUT_MS, MANUAL_PREVIEW_TIMEOUT_MS } from '../api/client';
 
 const response = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 
@@ -41,6 +41,33 @@ describe('external feature contracts', () => {
     let settled = false; const preview = api.createManualPreview('https://example.test/report'); const previewResult = preview.then((value) => ({ value }), (error) => ({ error })).finally(() => { settled = true; }); await vi.advanceTimersByTimeAsync(15_000);
     expect(hanging).toHaveBeenCalledTimes(2); expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(MANUAL_PREVIEW_TIMEOUT_MS - 15_000); expect((await previewResult as { error: { status: number } }).error).toMatchObject({ status: 408 });
+  });
+
+  it('allows internal health checks to outlive the backend sensor timeout', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
+    let settled = false;
+    const health = api.internalHealth('dionaea');
+    const result = health.then((value) => ({ value }), (error) => ({ error })).finally(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(INTERNAL_HEALTH_TIMEOUT_MS - 15_000);
+    expect((await result as { error: { status: number } }).error).toMatchObject({ status: 408 });
+  });
+
+  it('accepts the bounded internal sensor availability state returned by production', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({
+      configured: true,
+      reachable: true,
+      contract_valid: true,
+      hmac_verification: true,
+      availability_state: 'available',
+    }));
+    await expect(api.internalHealth('dionaea')).resolves.toMatchObject({
+      configured: true,
+      reachable: true,
+      availability_state: 'available',
+    });
   });
 
   it('rejects a cancellation response for a different job identity', async () => {

@@ -1,6 +1,6 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest';
 import { App } from '../pages/App';
 import { Login } from '../pages/Login';
 import { Register } from '../pages/Register';
@@ -18,6 +18,7 @@ const emptyIntelligenceEvents = { items: [], total: 0, limit: 5, offset: 0 };
 const isLatestEventsRequest = (input: RequestInfo | URL) => String(input).includes('/intelligence/events?');
 
 beforeEach(() => { clearToken(); sessionStorage.clear(); window.history.replaceState({}, '', '/'); vi.restoreAllMocks(); });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('authentication', () => {
   it('logs in through the central API without rendering the token', async () => {
@@ -52,6 +53,25 @@ describe('authentication', () => {
     expect(screen.getByRole('heading', { name: 'من الإشارة المتفرقة إلى قصة تهديد قابلة للتحقق.' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'إنشاء حساب مشاهد' })).toHaveAttribute('href', '/register');
     expect(screen.getByText('الربط والإثراء')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('href', 'https://github.com/AmmarAikan/CTI-Tool');
+    expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('rel', 'noreferrer');
+  });
+  it('shows copyable committee credentials only in demo mode', async () => {
+    vi.stubEnv('VITE_ACTIT_DEMO_MODE', 'true');
+    renderWithProviders(<Login />);
+    expect(screen.getByRole('heading', { name: 'وصول العرض التجريبي' })).toBeInTheDocument();
+    expect(screen.getByText('demo-viewer')).toBeInTheDocument();
+    expect(screen.getByText('ViewerDemo!2026')).toBeInTheDocument();
+    expect(screen.getByText('demo-analyst')).toBeInTheDocument();
+    expect(screen.getByText('AnalystDemo!2026')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'نسخ اسم المستخدم — مشاهد' }));
+    expect(await navigator.clipboard.readText()).toBe('demo-viewer');
+    cleanup();
+    vi.stubEnv('VITE_ACTIT_DEMO_MODE', 'false');
+    renderWithProviders(<Login />);
+    expect(screen.queryByText('ViewerDemo!2026')).not.toBeInTheDocument();
+    expect(screen.queryByText('AnalystDemo!2026')).not.toBeInTheDocument();
   });
   it('redirects protected routes to login', () => {
     window.history.replaceState({}, '', '/dashboard');
@@ -68,7 +88,7 @@ describe('authentication', () => {
 describe('external dashboard and sources', () => {
   it('renders health success and sources with search/filter', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => isLatestEventsRequest(input) ? json(emptyIntelligenceEvents) : String(input).endsWith('/auth/me') ? json(user) : String(input).endsWith('/integrations/external-control/health') ? json({ configured: true, reachable: true, service: 'external-sources', api_version: 'v1' }) : json(sources));
-    sessionStorage.setItem('cti_access_token', 'token'); renderWithProviders(<Dashboard />); await waitFor(() => expect(screen.getByText('متاحة')).toBeInTheDocument()); cleanup(); renderWithProviders(<Sources />); await waitFor(() => expect(screen.getByText('CISA KEV')).toBeInTheDocument()); const actor = userEvent.setup(); await actor.type(screen.getByPlaceholderText('بحث بالاسم أو المعرّف'), 'unknown'); expect(screen.getByText('لا توجد نتائج مطابقة للفلاتر الحالية.')).toBeInTheDocument();
+    sessionStorage.setItem('cti_access_token', 'token'); renderWithProviders(<Dashboard />); await waitFor(() => expect(screen.getByText('متاحة')).toBeInTheDocument()); expect(document.querySelector('a[href="/analysis"]')).toBeNull(); cleanup(); renderWithProviders(<Sources />); await waitFor(() => expect(screen.getByText('CISA KEV')).toBeInTheDocument()); const actor = userEvent.setup(); await actor.type(screen.getByPlaceholderText('بحث بالاسم أو المعرّف'), 'unknown'); expect(screen.getByText('لا توجد نتائج مطابقة للفلاتر الحالية.')).toBeInTheDocument();
   });
   it('renders source loading and error states', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(() => undefined)); renderWithProviders(<Sources />); expect(screen.getByText('جار تحميل المصادر...')).toBeInTheDocument();
@@ -99,8 +119,17 @@ describe('external dashboard and sources', () => {
     expect(screen.getByRole('navigation', { name: 'التنقل الرئيسي' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'المصادر الخارجية' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'الوظائف' })).toHaveClass('active');
+    expect(document.querySelector('a[href="/analysis"]')).toBeNull();
+    expect(screen.queryByText('عمليات التحليل')).not.toBeInTheDocument();
     const open = screen.getByRole('button', { name: 'فتح قائمة التنقل' });
     expect(open).toHaveAttribute('aria-expanded', 'false'); await userEvent.setup().click(open); expect(open).toHaveAttribute('aria-expanded', 'true');
     await userEvent.setup().click(screen.getByRole('button', { name: 'إغلاق قائمة التنقل' })); expect(open).toHaveAttribute('aria-expanded', 'false');
+  });
+  it('marks only the exact intelligence destination active on child routes', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).endsWith('/auth/me') ? json(user) : json({}));
+    sessionStorage.setItem('cti_access_token', 'token'); renderWithProviders(<Layout />, ['/intelligence/events']);
+    await waitFor(() => expect(screen.getByText('analyst')).toBeInTheDocument());
+    expect(document.querySelector('a[href="/intelligence"]')).not.toHaveClass('active');
+    expect(document.querySelector('a[href="/intelligence/events"]')).toHaveClass('active');
   });
 });

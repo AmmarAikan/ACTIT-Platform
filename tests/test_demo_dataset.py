@@ -14,11 +14,70 @@ from backend.app.db.models import EnrichmentRecord, OutlierSessionRecord, Source
 from backend.app.integrations.misp_client import MISPClient
 from backend.app.integrations.stix_exporter import STIXExporter
 from backend.app.schemas.api import IntelligenceStorylineResponse
-from scripts.create_demo_dataset import DEMO_ACCOUNTS, DEMO_EVENTS, create_disposable_demo, seed_defense_demo, seed_demo
+from scripts.create_demo_dataset import DEMO_ACCOUNTS, DEMO_EVENTS, create_disposable_demo, ensure_defense_demo, seed_defense_demo, seed_demo
 
 from scripts.demo_walkthrough import walkthrough
+from scripts import defense_demo_provider
 
 class DemoDatasetTests(unittest.TestCase):
+    def test_demo_review_provider_matches_the_strict_paginated_contract(self) -> None:
+        previous_token = defense_demo_provider.EXTERNAL_TOKEN
+        previous_mode = defense_demo_provider.REVIEW_MODE
+        try:
+            defense_demo_provider.EXTERNAL_TOKEN = "demo-external-control-token-2026"
+            defense_demo_provider.REVIEW_MODE = "available"
+            page = defense_demo_provider.latest_reviews(
+                limit=20,
+                offset=0,
+                authorization="Bearer demo-external-control-token-2026",
+            )
+            self.assertEqual(set(page), {"run_id", "records", "total", "limit", "offset", "malformed_records"})
+            self.assertEqual((page["total"], page["limit"], page["offset"], page["malformed_records"]), (1, 20, 0, 0))
+            self.assertEqual(page["records"][0]["title"], "[DEMO] Analyst review candidate")
+            empty_page = defense_demo_provider.latest_reviews(
+                limit=20,
+                offset=20,
+                authorization="Bearer demo-external-control-token-2026",
+            )
+            self.assertEqual(empty_page["records"], [])
+            self.assertEqual(empty_page["total"], 1)
+        finally:
+            defense_demo_provider.EXTERNAL_TOKEN = previous_token
+            defense_demo_provider.REVIEW_MODE = previous_mode
+
+    def test_defense_seed_reuses_only_a_complete_matching_demo(self) -> None:
+        with TemporaryDirectory(prefix="actit-defense-demo-reuse-") as directory:
+            path = Path(directory) / "demo.sqlite3"
+            engine = create_engine(f"sqlite+pysqlite:///{path}", future=True)
+            try:
+                Base.metadata.create_all(engine)
+                with Session(engine) as session:
+                    self.assertEqual(ensure_defense_demo(session), "seeded")
+                    counts = (
+                        session.scalar(select(func.count()).select_from(ThreatEvent)),
+                        session.scalar(select(func.count()).select_from(User)),
+                    )
+                    self.assertEqual(ensure_defense_demo(session), "already_present")
+                    self.assertEqual((
+                        session.scalar(select(func.count()).select_from(ThreatEvent)),
+                        session.scalar(select(func.count()).select_from(User)),
+                    ), counts)
+            finally:
+                engine.dispose()
+
+    def test_defense_seed_rejects_an_incomplete_existing_demo(self) -> None:
+        with TemporaryDirectory(prefix="actit-defense-demo-partial-") as directory:
+            path = Path(directory) / "demo.sqlite3"
+            engine = create_engine(f"sqlite+pysqlite:///{path}", future=True)
+            try:
+                Base.metadata.create_all(engine)
+                with Session(engine) as session:
+                    seed_demo(session)
+                    with self.assertRaisesRegex(ValueError, "incomplete"):
+                        ensure_defense_demo(session)
+            finally:
+                engine.dispose()
+
     def test_defense_seed_covers_accounts_enrichment_outlier_and_attack_candidate(self) -> None:
         with TemporaryDirectory(prefix="actit-defense-demo-test-") as directory:
             path = Path(directory) / "demo.sqlite3"

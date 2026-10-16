@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 from typing import Literal
 
-from fastapi import FastAPI, Header, HTTPException, Response, status
+from fastapi import FastAPI, Header, HTTPException, Query, Response, status
 
 app = FastAPI(title="ACTIT isolated demo provider", docs_url=None, redoc_url=None)
 REVIEW_MODE: Literal["available", "empty"] = "available"
@@ -31,7 +31,11 @@ def health() -> dict[str, str]:
 
 
 @app.get("/reviews/latest")
-def latest_reviews(authorization: str | None = Header(default=None)) -> dict[str, object]:
+def latest_reviews(
+    limit: int = Query(default=20, ge=1, le=50),
+    offset: int = Query(default=0, ge=0),
+    authorization: str | None = Header(default=None),
+) -> dict[str, object]:
     _external_auth(authorization)
     records = []
     if REVIEW_MODE == "available":
@@ -55,7 +59,14 @@ def latest_reviews(authorization: str | None = Header(default=None)) -> dict[str
             "category": "advisory",
             "status": "pending",
         })
-    return {"run_id": "demo-review-run-0001", "records": records}
+    return {
+        "run_id": "demo-review-run-0001",
+        "records": records[offset:offset + limit],
+        "total": len(records),
+        "limit": limit,
+        "offset": offset,
+        "malformed_records": 0,
+    }
 
 
 @app.get("/reviews/lifecycle")

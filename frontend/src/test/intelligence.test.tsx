@@ -40,6 +40,17 @@ describe('threat intelligence pages', () => {
     await expect(api.intelligenceEvents()).rejects.toMatchObject({ code: 'invalid_response' });
   });
 
+  it('accepts backend-bounded Unicode event text and still rejects an over-limit response', async () => {
+    const boundarySummary = '😀'.repeat(500);
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(page([{ ...event, summary: boundarySummary }])));
+    await expect(api.intelligenceEvents()).resolves.toMatchObject({ items: [{ summary: boundarySummary }] });
+    cleanup();
+    renderWithProviders(<EventsPage />);
+    expect(await screen.findByText('CVE campaign')).toBeInTheDocument();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(page([{ ...event, summary: '😀'.repeat(501) }])));
+    await expect(api.intelligenceEvents()).rejects.toMatchObject({ code: 'invalid_response' });
+  });
+
   it('shows and copies complete indicator values without redaction', async () => {
     const indicator = { id: 'i-1', event_id: 'cti-1', type: 'url', value: 'https://example.org/report?id=42', confidence: .8, source_pipeline: 'external', severity: 'high', first_seen: null, last_seen: null, ...assessed };
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).includes('indicators-summary') ? json({ total: 1, by_role: { observable: 1 }, by_assessment: { unknown: 1 }, by_validation: { valid: 1 }, by_type: { url: 1 } }) : json(page([indicator])));
@@ -240,5 +251,14 @@ describe('analysis and MISP', () => {
     await userEvent.setup().selectOptions(screen.getByLabelText('الحدث'), 'cti-1');
     expect(await screen.findByText(/T1059.001/)).toBeInTheDocument();
     expect(screen.getByText(/مرشح آلي للمراجعة/)).toBeInTheDocument();
+  });
+
+  it('loads the ATT&CK event selector and renders a valid empty mapping', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => String(input).endsWith('/attack') ? json({ event_id: 'cti-1', catalog_version: 'ATT&CK v19.1', source: 'built_in_subset', official_dataset_url: 'https://github.com/mitre-attack/attack-stix-data', techniques: [] }) : json(page([{ ...event, summary: '😀'.repeat(500) }])));
+    renderWithProviders(<AttackPage />);
+    await screen.findByRole('option', { name: 'CVE campaign' });
+    await userEvent.setup().selectOptions(screen.getByLabelText('الحدث'), 'cti-1');
+    expect(await screen.findByText('لم تُكتشف تقنية بدليل كافٍ في هذا الحدث.')).toBeInTheDocument();
+    expect(screen.queryByText('تعذر تحميل البيانات')).not.toBeInTheDocument();
   });
 });
