@@ -5,10 +5,12 @@ import { useAuth } from '../auth/AuthContext';
 import { useI18n } from '../i18n/I18nContext';
 import { AuthFrame } from '../components/PublicFrame';
 
-function DemoAccess() {
+function TemporaryAccess() {
   const { t } = useI18n();
   const [copied, setCopied] = useState('');
-  if (import.meta.env.VITE_ACTIT_DEMO_MODE !== 'true') return null;
+  const demoMode = import.meta.env.VITE_ACTIT_DEMO_MODE === 'true';
+  const committeeAccess = import.meta.env.VITE_ACTIT_COMMITTEE_ACCESS === 'true';
+  if (!demoMode && !committeeAccess) return null;
   const accounts = [
     { id: 'viewer', label: t('viewer'), username: 'demo-viewer', password: 'ViewerDemo!2026' },
     { id: 'analyst', label: t('analyst'), username: 'demo-analyst', password: 'AnalystDemo!2026' },
@@ -17,8 +19,11 @@ function DemoAccess() {
     await navigator.clipboard.writeText(value);
     setCopied(id);
   }
-  return <section className="demo-access" aria-labelledby="demo-access-title">
-    <header><div><span className="eyebrow">{t('demoAccessEyebrow')}</span><h2 id="demo-access-title">{t('demoAccessTitle')}</h2></div><p>{t('demoAccessDescription')}</p></header>
+  const eyebrow = t(demoMode ? 'demoAccessEyebrow' : 'committeeAccessEyebrow');
+  const title = t(demoMode ? 'demoAccessTitle' : 'committeeAccessTitle');
+  const description = t(demoMode ? 'demoAccessDescription' : 'committeeAccessDescription');
+  return <section className="demo-access" aria-labelledby="temporary-access-title">
+    <header><div><span className="eyebrow">{eyebrow}</span><h2 id="temporary-access-title">{title}</h2></div><p>{description}</p></header>
     <div className="demo-access-grid">
       {accounts.map((account) => <article key={account.id}>
         <h3>{account.label}</h3>
@@ -80,7 +85,7 @@ export function Login() {
           {t('loginRegisterPrompt')} <Link to="/register">{t('loginRegister')}</Link>
         </p>
       </form>
-      <DemoAccess />
+      <TemporaryAccess />
     </AuthFrame>
   );
 }

@@ -57,8 +57,9 @@ describe('authentication', () => {
     expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('target', '_blank');
     expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('rel', 'noreferrer');
   });
-  it('shows copyable committee credentials only in demo mode', async () => {
+  it('shows copyable demo credentials only in demo mode', async () => {
     vi.stubEnv('VITE_ACTIT_DEMO_MODE', 'true');
+    vi.stubEnv('VITE_ACTIT_COMMITTEE_ACCESS', 'false');
     renderWithProviders(<Login />);
     expect(screen.getByRole('heading', { name: 'وصول العرض التجريبي' })).toBeInTheDocument();
     expect(screen.getByText('demo-viewer')).toBeInTheDocument();
@@ -69,9 +70,28 @@ describe('authentication', () => {
     expect(await navigator.clipboard.readText()).toBe('demo-viewer');
     cleanup();
     vi.stubEnv('VITE_ACTIT_DEMO_MODE', 'false');
+    vi.stubEnv('VITE_ACTIT_COMMITTEE_ACCESS', 'false');
     renderWithProviders(<Login />);
     expect(screen.queryByText('ViewerDemo!2026')).not.toBeInTheDocument();
     expect(screen.queryByText('AnalystDemo!2026')).not.toBeInTheDocument();
+  });
+  it('shows distinct bilingual committee access only with the production committee flag', () => {
+    vi.stubEnv('VITE_ACTIT_DEMO_MODE', 'false');
+    vi.stubEnv('VITE_ACTIT_COMMITTEE_ACCESS', 'true');
+    sessionStorage.setItem('cti_language', 'en');
+    renderWithProviders(<Login />);
+    expect(screen.getByRole('heading', { name: 'Committee access' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Demo access' })).not.toBeInTheDocument();
+    expect(screen.getByText('demo-viewer')).toBeInTheDocument();
+    expect(screen.getByText('ViewerDemo!2026')).toBeInTheDocument();
+    expect(screen.getByText('demo-analyst')).toBeInTheDocument();
+    expect(screen.getByText('AnalystDemo!2026')).toBeInTheDocument();
+    expect(screen.queryByText('demo-admin')).not.toBeInTheDocument();
+    cleanup();
+    sessionStorage.setItem('cti_language', 'ar');
+    renderWithProviders(<Login />);
+    expect(screen.getByRole('heading', { name: 'وصول اللجنة' })).toBeInTheDocument();
+    expect(document.documentElement).toHaveAttribute('dir', 'rtl');
   });
   it('redirects protected routes to login', () => {
     window.history.replaceState({}, '', '/dashboard');
