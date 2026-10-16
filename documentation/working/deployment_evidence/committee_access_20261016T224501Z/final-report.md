@@ -40,10 +40,41 @@ Changed files:
 - Ordinary production build (`demo=false`, `committee=false`): PASS; both passwords absent.
 - Demo build (`demo=true`, `committee=false`): PASS; both demo credentials present.
 - Committee build (`demo=false`, `committee=true`): PASS; both committee credentials present.
+- Exact candidate image build: lint PASS, `22` files / `169/169` tests PASS, production build PASS.
+- Candidate bundle inspection: both requested credentials present; no `demo-admin` value.
+- Candidate HTTP checks: `/` and `/healthz` HTTP 200.
+- Candidate browser: English Committee Access, Arabic/RTL Committee Access, viewer login, and analyst login PASS; zero browser errors.
 
 ## Deployment result
 
-PENDING NEW IMMUTABLE FRONTEND RELEASE.
+Candidate release: `/opt/cti-platform/releases/20261016T224501Z-committee-access`.
+
+Candidate image: `cti-central-frontend:20261016T224501Z-committee-access`, ID/digest `sha256:445e9a87b38170dc504c04249d8804aebdb7099e835d993f3cee8d4332f06a6c`.
+
+Deployed release and current symlink target: `/opt/cti-platform/releases/20261016T224501Z-committee-access`.
+
+Only the frontend was recreated. New frontend container: `c090cc480e0a` on `sha256:445e9a87...`. Backend `73821101f6a9` and PostgreSQL `29d223eb2d95` were not restarted or recreated.
+
+Local production `/` and `/api/v1/health`: HTTP 200. Frontend, backend, and database are healthy.
+
+The exact HTTPS hostname `https://cti-gateway-vps.tailf2792f.ts.net/login` returned HTTP 200. Browser verification through that hostname passed the English and Arabic/RTL Committee Access card, absence of Demo Access/admin credentials, viewer login, and analyst login with zero browser errors. `/api/v1/health` through the same hostname returned HTTP 200.
+
+Read-only Tailscale status identifies this existing HTTPS endpoint as `tailnet only`. The VPS system resolver and an external web fetcher cannot resolve/enter it, so verification used the hostname with its recorded Tailscale address (`100.91.28.22`) while preserving TLS SNI and certificate validation. No Tailscale, Serve, or Funnel setting was changed.
+
+## Final login and RBAC verification
+
+- `demo-viewer`: login HTTP 200; `/auth/me` exact active viewer; analyst-authorized write boundary HTTP 403; administration HTTP 403.
+- `demo-analyst`: login HTTP 200; `/auth/me` exact active analyst; analyst-authorized boundary reached request validation (HTTP 422 for intentionally empty input, no mutation); administration HTTP 403.
+- Public HTTPS browser login through the exact hostname passed for both accounts.
+- No administrator credential is present in the card or candidate bundle.
+
+## Git state
+
+Implementation commit `bcd7a23d2bc0aa9907688ed262afaef4f90d119b` was pushed to `origin/codex/committee-access-20261017`. This completed deployment report is committed and pushed as a separate evidence-only follow-up on the same branch. No force push or history rewrite was used.
+
+## Remaining limitation
+
+The supplied `.ts.net` endpoint is configured by the existing Tailscale state as tailnet-only rather than world-public. It works through the exact HTTPS hostname for tailnet clients and was verified as described above. Changing that ingress scope was explicitly out of scope. The frontend build also retains the existing non-failing bundle-size warning and npm reports one pre-existing high-severity dependency advisory; neither was modified in this narrowly scoped temporary-access change.
 
 ## Post-defense removal procedure
 
@@ -57,7 +88,27 @@ docker build --pull=false \
   /opt/cti-platform/releases/<POST_DEFENSE_RELEASE>/frontend
 ```
 
-2. Preserve the then-current frontend under a rollback tag, atomically switch `/opt/cti-platform/current` to the new immutable release, tag the post-defense image as `cti-central-frontend:current`, and recreate only `frontend` with the established `cti-backend-20260903-v1` Compose project, three environment files, and `--no-deps --force-recreate --no-build`.
+2. Preserve the then-current frontend under a rollback tag, atomically switch `/opt/cti-platform/current` to the new immutable release, tag the post-defense image as `cti-central-frontend:current`, and recreate only `frontend`:
+
+```bash
+POST_DEFENSE_RELEASE=/opt/cti-platform/releases/<UTC>-post-defense
+POST_DEFENSE_IMAGE=cti-central-frontend:<UTC>-post-defense
+CURRENT_RELEASE="$(readlink -f /opt/cti-platform/current)"
+
+# Prepare POST_DEFENSE_RELEASE as a new immutable copy of CURRENT_RELEASE, then build it
+# with the false flags shown in step 1. Never edit CURRENT_RELEASE in place.
+docker image tag cti-central-frontend:current cti-central-frontend:rollback-committee-access
+docker image tag "$POST_DEFENSE_IMAGE" cti-central-frontend:current
+ln -s "$POST_DEFENSE_RELEASE" /opt/cti-platform/current.post-defense-next
+mv -Tf /opt/cti-platform/current.post-defense-next /opt/cti-platform/current
+docker compose --project-name cti-backend-20260903-v1 \
+  --env-file /etc/cti-platform/central.env \
+  --env-file /opt/cti-platform/clients/backend-integrations.env \
+  --env-file /opt/cti-platform/clients/misp-client.env \
+  --file "$POST_DEFENSE_RELEASE/compose.yaml" \
+  --file "$POST_DEFENSE_RELEASE/infra/vps/central.compose.yaml" \
+  up -d --no-deps --force-recreate --no-build frontend
+```
 
 3. Deactivate only the two temporary accounts through ACTIT's supported administration API:
 
@@ -73,10 +124,33 @@ done
 unset ADMIN_TOKEN
 ```
 
-4. Verify both logins return HTTP 401 using their temporary passwords.
+4. Verify both logins return HTTP 401 using their temporary passwords:
 
-5. Verify the public `/login` page contains neither username nor password and `/api/v1/health` remains HTTP 200. Do not remove or alter normal registration/login.
+```bash
+for credential in 'demo-viewer|ViewerDemo!2026' 'demo-analyst|AnalystDemo!2026'; do
+  username="${credential%%|*}"
+  password="${credential#*|}"
+  body="$(jq -nc --arg username "$username" --arg password "$password" '{username:$username,password:$password}')"
+  test "$(curl -sS -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+    -d "$body" http://127.0.0.1:18080/api/v1/auth/login)" = 401
+done
+```
+
+5. Verify the public `/login` page visually contains neither username nor password, inspect the rebuilt bundle to confirm both password literals are absent, and confirm `/api/v1/health` remains HTTP 200. Do not remove or alter normal registration/login.
 
 ## Rollback
 
-Rollback path: `/opt/cti-platform/releases/20261016T193810Z-final-delivery`. Final committee-access release/image identifiers and rollback commands will be added after deployment.
+Rollback path: `/opt/cti-platform/releases/20261016T193810Z-final-delivery`. Its frontend image is preserved as `cti-central-frontend:rollback-20261016T193810Z-final-delivery` (`sha256:c88761a0734b66e4324cfc5d17d955b664f176698e195617fb344a9444a77bc0`). Exact rollback:
+
+```bash
+docker image tag cti-central-frontend:rollback-20261016T193810Z-final-delivery cti-central-frontend:current
+ln -s /opt/cti-platform/releases/20261016T193810Z-final-delivery /opt/cti-platform/current.committee-rollback
+mv -Tf /opt/cti-platform/current.committee-rollback /opt/cti-platform/current
+docker compose --project-name cti-backend-20260903-v1 \
+  --env-file /etc/cti-platform/central.env \
+  --env-file /opt/cti-platform/clients/backend-integrations.env \
+  --env-file /opt/cti-platform/clients/misp-client.env \
+  --file /opt/cti-platform/releases/20261016T193810Z-final-delivery/compose.yaml \
+  --file /opt/cti-platform/releases/20261016T193810Z-final-delivery/infra/vps/central.compose.yaml \
+  up -d --no-deps --force-recreate --no-build frontend
+```
