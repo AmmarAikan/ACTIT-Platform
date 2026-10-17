@@ -141,11 +141,23 @@ describe('threat intelligence pages', () => {
       factors: [{ kind: 'shared_observable', label: 'domain', value: 'command.example' }],
       created_at: '2026-09-07T10:02:00Z',
     };
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(page([correlation])));
+    const secondCorrelation = {
+      ...correlation,
+      id: 'c-2',
+      source_event_id: 'cti-3',
+      target_event_id: 'cti-4',
+      reason: 'same_ip',
+      source_event: { ...correlation.source_event, event_id: 'cti-3', title: 'Second external advisory' },
+      target_event: { ...correlation.target_event, event_id: 'cti-4', title: 'Second internal observation' },
+      factors: [{ kind: 'shared_observable', label: 'ip', value: '203.0.113.42' }],
+      created_at: '2026-09-07T10:03:00Z',
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(page([correlation, secondCorrelation])));
     renderWithProviders(<CorrelationsPage />);
-    expect(await screen.findByText('تطابق قيمة مرصودة')).toBeInTheDocument();
-    expect(screen.getByText('ارتباط داخلي وخارجي')).toBeInTheDocument();
+    expect(await screen.findAllByText('تطابق قيمة مرصودة')).toHaveLength(2);
+    expect(screen.getAllByText('ارتباط داخلي وخارجي')).toHaveLength(2);
     expect(screen.getByText('command.example')).toBeInTheDocument();
+    expect(screen.getByText('203.0.113.42')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'External campaign' })).toHaveAttribute('href', '/intelligence/events/cti-1');
     expect(screen.getByRole('link', { name: 'Internal honeypot event' })).toHaveAttribute('href', '/intelligence/events/cti-2');
     expect(document.body).not.toHaveTextContent('raw_reference');
@@ -158,6 +170,12 @@ describe('threat intelligence pages', () => {
     expect(screen.getByText('حجم التنبيهات: 3')).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('source_ip');
     expect(document.body).not.toHaveTextContent('features');
+  });
+
+  it('renders the valid empty correlations state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => json(page([])));
+    renderWithProviders(<CorrelationsPage />);
+    expect(await screen.findByText('لا توجد بيانات')).toBeInTheDocument();
   });
 });
 

@@ -50,6 +50,11 @@ class ExternalIngestionService:
             raise ValueError("external_job_not_terminal")
         result = job.get("result") if isinstance(job.get("result"), dict) else {}
         export = result.get("export") if isinstance(result.get("export"), dict) else {}
+        collected_count = int(result.get("accepted_records") or 0)
+        if collected_count <= 0:
+            raise ValueError("external_job_no_new_records")
+        if export.get("status") != "completed":
+            raise ValueError("external_job_export_invalid")
         export_run_id = export.get("run_id")
         match = _DIGEST.fullmatch(str(export.get("dataset_sha256") or ""))
         if not isinstance(export_run_id, str) or not export_run_id or match is None:
@@ -61,14 +66,13 @@ class ExternalIngestionService:
             ExternalIngestionOperation.dataset_sha256 == digest,
         ))
         if existing is not None:
-            if existing.state == "failed_retryable":
-                existing.state = _retry_state(existing.stage)
-                existing.error_code = existing.error_category = None
-                existing.updated_at = now(); self.session.commit(); _wake.set()
+            # A create/resume command is observational for an existing durable
+            # identity. Failed operations move only through the explicit retry
+            # endpoint, so reloads and remounts cannot restart work implicitly.
             return existing
         operation = ExternalIngestionOperation(
             external_job_id=job_id, export_run_id=export_run_id, dataset_sha256=digest,
-            collected_count=int(result.get("accepted_records") or 0),
+            collected_count=collected_count,
             exported_count=int(export.get("accepted_records") or 0),
         )
         self.session.add(operation)

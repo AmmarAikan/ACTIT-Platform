@@ -7,6 +7,7 @@ import os
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -207,6 +208,23 @@ class LocalCollectionJobTests(unittest.TestCase):
             terminal = self._wait(client, queued["job_id"], self._headers())
             latest = client.get(f"{API_PREFIX}/exports/latest", headers=self._headers()).json()
             self.assertEqual((terminal["state"], latest["dataset"], latest["accepted_records"]), ("completed", [], 0))
+            self._close(app, root)
+
+    def test_single_source_empty_run_never_falls_back_to_active_manual_checkpoint(self):
+        executor = RecordingExecutor({"the-hacker-news": SourceExecutionResult("the-hacker-news", "completed")})
+        manual = replace(export_item("active-manual-checkpoint"), source="Manual URL", source_type="manual_url",
+                         metadata={"run_id": "ext-prior-manual", "observed_in": ["manual_url"],
+                                   "lifecycle": {"active": True}})
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            save_json({"schema_version": "1.0", "accepted": {manual.record_id: manual.to_dict()}, "retired": {}},
+                      root / "state" / "manual_checkpoints.json")
+            app = self._build(root, executor); client = TestClient(app)
+            queued = client.post(f"{API_PREFIX}/jobs", json={"source_ids": ["the-hacker-news"]}, headers=self._headers()).json()
+            terminal = self._wait(client, queued["job_id"], self._headers())
+            latest = client.get(f"{API_PREFIX}/exports/latest", headers=self._headers()).json()
+            self.assertEqual(terminal["result"]["accepted_records"], 0)
+            self.assertEqual((latest["dataset"], latest["accepted_records"]), ([], 0))
             self._close(app, root)
 
     def test_unified_export_includes_only_active_manual_checkpoint_and_deduplicates_with_provenance(self):
