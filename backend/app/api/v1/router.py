@@ -2493,6 +2493,8 @@ def _misp_preview_projection(event: ThreatEvent, client: MISPClient) -> dict[str
     payload = client.event_payload(event)
     mapped = payload["Event"]
     filtering = payload["cti_filtering"]
+    reports = mapped.get("EventReport", [])
+    report = reports[0] if reports else None
     return {
         "event_id": event.id,
         "title": _safe_event_title(event),
@@ -2513,6 +2515,15 @@ def _misp_preview_projection(event: ThreatEvent, client: MISPClient) -> dict[str
             for item in mapped.get("Tag", [])
             if item.get("name")
         ],
+        "event_report": (
+            {
+                "name": str(report["name"]),
+                "distribution": 0,
+                "content": str(report["content"]),
+            }
+            if isinstance(report, dict)
+            else None
+        ),
         "included": filtering["included"],
         "omitted": filtering["omitted"],
         "omitted_by_reason": filtering["omitted_by_reason"],
@@ -2526,6 +2537,9 @@ def _misp_delivery_projection(event_id: str, result: dict[str, Any]) -> dict[str
         "attributes_requested": result["attributes_requested"],
         "attributes_added": result["attributes_added"],
         "attributes_verified": result["attributes_verified"],
+        "event_reports_requested": int(result.get("event_reports_requested") or 0),
+        "event_reports_added": int(result.get("event_reports_added") or 0),
+        "event_reports_verified": int(result.get("event_reports_verified") or 0),
         "published": result["published"],
         "misp_event_id": _safe_misp_event_id(
             result.get("misp_event_id") or result.get("event_id")
@@ -2707,6 +2721,9 @@ def intelligence_misp_send(
         attributes_requested=delivery["attributes_requested"],
         attributes_added=delivery["attributes_added"],
         attributes_verified=delivery["attributes_verified"],
+        event_reports_requested=delivery["event_reports_requested"],
+        event_reports_added=delivery["event_reports_added"],
+        event_reports_verified=delivery["event_reports_verified"],
         published=delivery["published"],
         misp_event_id=delivery["misp_event_id"],
         misp_event_uuid=delivery["misp_event_uuid"],
@@ -2834,6 +2851,9 @@ def intelligence_misp_batch(
             attributes_requested=delivery["attributes_requested"],
             attributes_added=delivery["attributes_added"],
             attributes_verified=delivery["attributes_verified"],
+            event_reports_requested=delivery["event_reports_requested"],
+            event_reports_added=delivery["event_reports_added"],
+            event_reports_verified=delivery["event_reports_verified"],
             published=delivery["published"],
             misp_event_id=delivery["misp_event_id"],
             misp_event_uuid=delivery["misp_event_uuid"],
@@ -2927,6 +2947,9 @@ def intelligence_misp_deliveries(
                 "attributes_requested": optional_count(details.get("attributes_requested")),
                 "attributes_added": optional_count(details.get("attributes_added")),
                 "attributes_verified": optional_count(details.get("attributes_verified")),
+                "event_reports_requested": optional_count(details.get("event_reports_requested")),
+                "event_reports_added": optional_count(details.get("event_reports_added")),
+                "event_reports_verified": optional_count(details.get("event_reports_verified")),
                 "published": optional_bool(details.get("published")),
             }
         )

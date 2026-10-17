@@ -97,9 +97,16 @@ all other non-loopback HTTP hosts. This avoids incorrectly trusting MISP's
 localhost-only origin certificate while keeping the hop inside one isolated
 same-host bridge. Tailnet operators still use Tailscale HTTPS.
 
-MISP delivery uses deterministic event and attribute UUIDs, defaults to
-`published=false`, inserts only missing attributes, reads the event back, and
-fails if requested indicators are absent. PostgreSQL remains authoritative.
+MISP delivery uses deterministic event, attribute, and Event Report UUIDs and
+defaults to `published=false`. It inserts only missing attributes and, when a
+privacy-reviewed External event has meaningful narrative, one bounded
+organisation-only Event Report carrying ACTIT provenance and handling context.
+The report is omitted for Internal events, short/decorative text, or text in
+which the approved sensitive-data detector still finds a possible secret.
+Delivery reads the event back and fails if requested indicators or the expected
+report are absent. PostgreSQL remains authoritative. The integration does not
+invent MISP Objects: object creation requires explicit relationships that are
+not present in the current flat observable handoff.
 
 ## NER runtime decision
 

@@ -242,7 +242,7 @@ describe('analysis and MISP', () => {
       if (path.endsWith('/misp/health')) return json({ configured: true, reachable: true });
       if (path.includes('/misp/deliveries')) return json(page([]));
       if (path.includes('/misp/candidates?')) return json({ ...page([mispCandidate]), configured: true });
-      if (path.endsWith('/misp-preview')) return json({ event_id: 'cti-1', title: 'CVE campaign', configured: true, published: false, distribution: 0, attributes: [{ type: 'vulnerability', category: 'External analysis', value: 'CVE-2026-1', to_ids: false }], tags: ['cti-platform:external'], included: 1, omitted: 0, omitted_by_reason: { external_reference: 0, invalid: 0, non_actionable: 0, unsupported: 0 } });
+      if (path.endsWith('/misp-preview')) return json({ event_id: 'cti-1', title: 'CVE campaign', configured: true, published: false, distribution: 0, attributes: [{ type: 'vulnerability', category: 'External analysis', value: 'CVE-2026-1', to_ids: false }], tags: ['cti-platform:external'], event_report: { name: 'ACTIT provenance and source context', distribution: 0, content: '# ACTIT shared intelligence\n\nVerified source context.' }, included: 1, omitted: 0, omitted_by_reason: { external_reference: 0, invalid: 0, non_actionable: 0, unsupported: 0 } });
       if (path.endsWith('/misp/batch') && options?.method === 'POST') { batchRequests.push(options); return pending; }
       throw new Error(`Unexpected request: ${path}`);
     });
@@ -251,13 +251,14 @@ describe('analysis and MISP', () => {
     const actor = userEvent.setup();
     await actor.click(await screen.findByRole('button', { name: 'مراجعة المعاينة' }));
     expect(await screen.findByText('CVE-2026-1')).toBeInTheDocument();
+    expect(screen.getByText('ACTIT provenance and source context')).toBeInTheDocument();
     await actor.click(screen.getByLabelText('تحديد CVE campaign للمشاركة'));
     const send = screen.getByRole('button', { name: 'إرسال الأحداث المحددة' });
     await actor.click(send);
     expect(screen.getByRole('button', { name: 'جار الإرسال والتحقق...' })).toBeDisabled();
     expect(batchRequests).toHaveLength(1);
     expect(JSON.parse(String(batchRequests[0].body))).toEqual({ event_ids: ['cti-1'], confirm_unpublished: true });
-    resolveSend?.(await json({ batch_id: '11111111-1111-4111-8111-111111111111', requested: 1, delivered: 1, skipped: 0, failed: 0, published: 0, items: [{ event_id: 'cti-1', status: 'delivered', reason: null, created: true, attributes_requested: 1, attributes_added: 1, attributes_verified: 1, published: false, misp_event_id: '42', misp_event_uuid: '22222222-2222-4222-8222-222222222222' }] }));
+    resolveSend?.(await json({ batch_id: '11111111-1111-4111-8111-111111111111', requested: 1, delivered: 1, skipped: 0, failed: 0, published: 0, items: [{ event_id: 'cti-1', status: 'delivered', reason: null, created: true, attributes_requested: 1, attributes_added: 1, attributes_verified: 1, event_reports_requested: 1, event_reports_added: 1, event_reports_verified: 1, published: false, misp_event_id: '42', misp_event_uuid: '22222222-2222-4222-8222-222222222222' }] }));
     await waitFor(() => expect(screen.getByText(/تم التسليم: 1/)).toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'فتح حدث MISP' })).toHaveAttribute('href', expect.stringContaining('/events/view/42'));
   });

@@ -1085,6 +1085,50 @@ class BackendEnhancementTests(unittest.TestCase):
         self.assertIn('misp-galaxy:mitre-attack-pattern="Scheduled Task/Job - T1053"', tags)
         self.assertIn("cti-platform:attack-mapping=analyst-review-required", tags)
 
+    def test_misp_payload_adds_bounded_external_event_report(self) -> None:
+        seen = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        event = SimpleNamespace(
+            id="cti-misp-report",
+            title="External report with source context",
+            description=("Privacy-reviewed external narrative with concrete source context. " * 3),
+            indicators=[],
+            severity="medium",
+            tags=[],
+            source_pipeline="external",
+            source_type="rss",
+            first_seen=seen,
+        )
+
+        first = MISPClient().event_payload(event)["Event"]["EventReport"][0]
+        second = MISPClient().event_payload(event)["Event"]["EventReport"][0]
+
+        self.assertEqual(first["uuid"], second["uuid"])
+        self.assertEqual(first["distribution"], 0)
+        self.assertIn("ACTIT remains the authoritative record", first["content"])
+        self.assertIn("cti-misp-report", first["content"])
+        self.assertIn("Source type: `rss`", first["content"])
+
+        long_event = SimpleNamespace(
+            **{**event.__dict__, "description": "A" * 8000}
+        )
+        bounded = MISPClient().event_payload(long_event)["Event"]["EventReport"][0]
+        self.assertLessEqual(len(bounded["content"]), 7000)
+        self.assertIn("Narrative truncated by ACTIT", bounded["content"])
+
+        internal = SimpleNamespace(**{**event.__dict__, "source_pipeline": "internal"})
+        self.assertNotIn("EventReport", MISPClient().event_payload(internal)["Event"])
+
+        secret = SimpleNamespace(
+            **{
+                **event.__dict__,
+                "description": (
+                    "Privacy-reviewed context should fail closed when it still contains "
+                    "password=NeverShareThisCredential12345 in the narrative."
+                ),
+            }
+        )
+        self.assertNotIn("EventReport", MISPClient().event_payload(secret)["Event"])
+
     def test_time_bounds_are_normalized_before_persistence_and_misp_mapping(self) -> None:
         later = datetime(2026, 8, 29, 0, 14, tzinfo=timezone.utc)
         earlier = datetime(2026, 8, 28, 22, 13, tzinfo=timezone.utc)
@@ -1206,6 +1250,7 @@ class BackendEnhancementTests(unittest.TestCase):
             [
                 FakeResponse({"response": [{"Event": stored}]}),
                 FakeResponse({"Event": stored}),
+                FakeResponse({"Event": stored}),
             ]
         )
 
@@ -1217,7 +1262,69 @@ class BackendEnhancementTests(unittest.TestCase):
 
         self.assertFalse(result["cti_delivery"]["created"])
         self.assertEqual(result["cti_delivery"]["attributes_added"], 0)
-        self.assertEqual([call[0] for call in session.calls], ["POST", "GET"])
+        self.assertEqual([call[0] for call in session.calls], ["POST", "GET", "GET"])
+
+    def test_misp_send_adds_and_verifies_event_report_idempotently(self) -> None:
+        seen = datetime(2026, 8, 24, tzinfo=timezone.utc)
+        event = SimpleNamespace(
+            id="cti-event-report-delivery",
+            title="External source narrative",
+            description=("A privacy-reviewed external report describing observed threat activity. " * 3),
+            indicators=[],
+            severity="medium",
+            tags=["external"],
+            source_pipeline="external",
+            source_type="rss",
+            first_seen=seen,
+        )
+        mapped = MISPClient().event_payload(event)["Event"]
+        report = mapped["EventReport"][0]
+        event_without_report = {
+            "id": "9",
+            "uuid": mapped["uuid"],
+            "published": False,
+            "Attribute": [],
+            "EventReport": [],
+        }
+        stored = {**event_without_report, "EventReport": [report]}
+        session = FakeSession(
+            [
+                FakeResponse({"response": [{"Event": event_without_report}]}),
+                FakeResponse({"Event": event_without_report}),
+                FakeResponse({"EventReport": report}),
+                FakeResponse({"Event": stored}),
+            ]
+        )
+
+        result = MISPClient(
+            base_url="https://misp.test",
+            api_key="test-only",
+            session=session,
+        ).send_event(event, dry_run=False)
+
+        self.assertEqual(result["cti_delivery"]["event_reports_requested"], 1)
+        self.assertEqual(result["cti_delivery"]["event_reports_added"], 1)
+        self.assertEqual(result["cti_delivery"]["event_reports_verified"], 1)
+        self.assertEqual(session.calls[2][1], "https://misp.test/eventReports/add/9")
+        self.assertEqual(session.calls[2][2]["json"]["uuid"], report["uuid"])
+
+        repeat_session = FakeSession(
+            [
+                FakeResponse({"response": [{"Event": stored}]}),
+                FakeResponse({"Event": stored}),
+                FakeResponse({"Event": stored}),
+            ]
+        )
+        repeated = MISPClient(
+            base_url="https://misp.test",
+            api_key="test-only",
+            session=repeat_session,
+        ).send_event(event, dry_run=False)
+        self.assertEqual(repeated["cti_delivery"]["event_reports_added"], 0)
+        self.assertEqual(
+            [call[0] for call in repeat_session.calls],
+            ["POST", "GET", "GET"],
+        )
 
     def test_model_evidence_quality_gates_use_saved_test_reports(self) -> None:
         fake_runtime = SimpleNamespace(diagnostics=lambda: {"backend": "transformer"})

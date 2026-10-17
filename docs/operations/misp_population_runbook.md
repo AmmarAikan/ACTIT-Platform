@@ -19,8 +19,12 @@ and this procedure does not authorize automatic mirroring or publication.
    successful delivery unless the approval explicitly requests an idempotency
    re-verification. Hash the ordered event-ID list and record only the count and
    digest in the operational checkpoint.
-5. Re-open the preview for each selected event. Stop if the event is no longer
-   ready, the included-attribute count is zero, or the snapshot digest changes.
+5. Re-open the preview for each selected event. Review both the filtered
+   attributes and any proposed Event Report. A report is eligible only for a
+   privacy-reviewed External narrative with meaningful content; Internal,
+   short/decorative, or possible-secret text must produce no report. Stop if the
+   event is no longer ready, the included-attribute count is zero, or the
+   snapshot digest changes.
 
 The number of batches is `ceil(approved_pending_event_count / 20)`. A batch may
 contain at most 20 unique event IDs. Do not pad a final partial batch, combine
@@ -39,8 +43,9 @@ For each ordered batch:
    event content or credentials. Every requested event must have one independent
    `delivered`, `skipped`, or `failed` outcome and a corresponding audit entry.
 4. Verify that every delivered event reports `published=false`. For delivered
-   events, verify the returned MISP identity and attribute verification counts.
-   Deterministic event and attribute UUIDs make an explicitly approved repeat
+   events, verify the returned MISP identity, attribute verification counts,
+   and Event Report requested/added/verified counts. Deterministic event,
+   attribute, and Event Report UUIDs make an explicitly approved repeat
    idempotent, but they do not authorize an automatic retry.
 5. Continue only when all outcomes match the approved scope and MISP and Central
    remain healthy. Recompute remaining counts after each batch without changing
@@ -49,8 +54,8 @@ For each ordered batch:
 ## Mandatory stop conditions
 
 Stop the population window immediately on any failed or unexpected skipped
-outcome, publication, identity mismatch, missing audit entry, attribute
-verification mismatch, candidate/snapshot drift, authentication failure,
+outcome, publication, identity mismatch, missing audit entry, attribute or Event
+Report verification mismatch, candidate/snapshot drift, authentication failure,
 transport failure, unsafe host pressure, MISP health degradation, or operator
 uncertainty. Do not retry or roll back automatically. Preserve all PostgreSQL,
 MISP, Docker volume, and audit state, capture sanitized evidence, and request a

@@ -9,6 +9,7 @@ import requests
 
 from backend.app.core.config import get_settings
 from backend.app.pipeline.enrichment.observable_assessor import ObservableAssessor
+from backend.app.pipeline.ingestion.external.privacy.pii_detector import SensitiveDataDetector
 from backend.app.services.attack_mapping_service import AttackMappingService
 
 
@@ -17,6 +18,8 @@ class MISPClient:
         {"cti-misp", "localhost", "127.0.0.1", "::1"}
     )
     NAMESPACE: ClassVar[uuid.UUID] = uuid.UUID("ef1932f8-50d6-4d34-b4d7-d4e2965706ac")
+    EVENT_REPORT_MAX_CHARACTERS: ClassVar[int] = 5000
+    EVENT_REPORT_MIN_CHARACTERS: ClassVar[int] = 80
     ATTRIBUTE_TYPES: ClassVar[dict[str, tuple[str, str, bool]]] = {
         # Extraction proves observation, not maliciousness. Analysts or an
         # enrichment rule must opt in to IDS use after contextual validation.
@@ -117,6 +120,9 @@ class MISPClient:
             "Attribute": attributes,
             "Tag": [{"name": name} for name in self._event_tags(event)],
         }
+        event_report = self._event_report(event, event_uuid)
+        if event_report is not None:
+            misp_event["EventReport"] = [event_report]
         if first_seen:
             try:
                 misp_event["date"] = datetime.fromisoformat(first_seen.replace("Z", "+00:00")).date().isoformat()
@@ -139,12 +145,14 @@ class MISPClient:
             raise RuntimeError("MISP_URL and MISP_API_KEY must be configured before sending events")
 
         expected_attributes = list(payload["Event"].get("Attribute", []))
+        expected_reports = list(payload["Event"].get("EventReport", []))
         event_uuid = str(payload["Event"]["uuid"])
         misp_event = self._find_event(event_uuid)
         created = misp_event is None
         if misp_event is None:
             event_only = dict(payload["Event"])
             event_only.pop("Attribute", None)
+            event_only.pop("EventReport", None)
             response = self.session.post(
                 f"{self.base_url}/events/add",
                 json={"Event": event_only},
@@ -158,6 +166,15 @@ class MISPClient:
         event_id = str(misp_event.get("id") or "")
         if not event_id:
             raise RuntimeError("MISP accepted the request but returned no event id")
+        if not created:
+            response = self.session.get(
+                f"{self.base_url}/events/view/{event_id}",
+                headers=self._headers(),
+                verify=self.verify_tls,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            misp_event = self._extract_event(response.json())
 
         existing_keys = {
             self._attribute_key(attribute)
@@ -173,6 +190,26 @@ class MISPClient:
             response = self.session.post(
                 f"{self.base_url}/attributes/add/{event_id}",
                 json={"Attribute": attribute},
+                headers=self._headers(),
+                verify=self.verify_tls,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+
+        existing_report_uuids = {
+            str(report.get("uuid") or "")
+            for report in misp_event.get("EventReport", [])
+            if isinstance(report, dict) and report.get("uuid")
+        }
+        pending_reports = [
+            report
+            for report in expected_reports
+            if str(report.get("uuid") or "") not in existing_report_uuids
+        ]
+        for report in pending_reports:
+            response = self.session.post(
+                f"{self.base_url}/eventReports/add/{event_id}",
+                json=report,
                 headers=self._headers(),
                 verify=self.verify_tls,
                 timeout=self.timeout,
@@ -203,6 +240,22 @@ class MISPClient:
                 "MISP event was created but indicator verification failed "
                 f"({len(missing)} missing of {len(expected_keys)})"
             )
+        stored_report_uuids = {
+            str(report.get("uuid") or "")
+            for report in stored_event.get("EventReport", [])
+            if isinstance(report, dict) and report.get("uuid")
+        }
+        expected_report_uuids = {
+            str(report.get("uuid") or "")
+            for report in expected_reports
+            if report.get("uuid")
+        }
+        missing_reports = sorted(expected_report_uuids - stored_report_uuids)
+        if missing_reports:
+            raise RuntimeError(
+                "MISP event was created but event report verification failed "
+                f"({len(missing_reports)} missing of {len(expected_report_uuids)})"
+            )
 
         return {
             "Event": stored_event,
@@ -215,6 +268,9 @@ class MISPClient:
                 "attributes_requested": len(expected_attributes),
                 "attributes_added": len(pending),
                 "attributes_verified": len(expected_keys),
+                "event_reports_requested": len(expected_reports),
+                "event_reports_added": len(pending_reports),
+                "event_reports_verified": len(expected_report_uuids),
                 "published": bool(stored_event.get("published", False)),
             },
         }
@@ -335,3 +391,58 @@ class MISPClient:
             if item["mapping_source"] == "rule_based_candidate":
                 tags.append("cti-platform:attack-mapping=analyst-review-required")
         return sorted(set(tags))
+
+    @classmethod
+    def _event_report(cls, event, event_uuid: str) -> dict[str, Any] | None:
+        """Build a bounded report only from privacy-reviewed External narrative."""
+        if str(getattr(event, "source_pipeline", "") or "").lower() != "external":
+            return None
+        narrative = str(
+            getattr(event, "description", "")
+            or getattr(event, "summary", "")
+            or ""
+        ).replace("\x00", "").strip()
+        title = str(getattr(event, "title", "") or "").strip()
+        if (
+            len(narrative) < cls.EVENT_REPORT_MIN_CHARACTERS
+            or narrative.casefold() == title.casefold()
+        ):
+            return None
+        if any(
+            finding.category == "possible_secret"
+            for finding in SensitiveDataDetector().detect(narrative)
+        ):
+            return None
+        if len(narrative) > cls.EVENT_REPORT_MAX_CHARACTERS:
+            narrative = (
+                narrative[: cls.EVENT_REPORT_MAX_CHARACTERS].rstrip()
+                + "\n\n_[Narrative truncated by ACTIT before MISP delivery.]_"
+            )
+
+        def field(value: object, fallback: str = "not recorded") -> str:
+            text = " ".join(str(value or "").replace("`", "'").split())
+            return text[:200] if text else fallback
+
+        content = "\n".join(
+            [
+                "# ACTIT shared intelligence",
+                "",
+                narrative,
+                "",
+                "## Provenance and handling",
+                "",
+                f"- ACTIT event ID: `{field(getattr(event, 'id', None))}`",
+                f"- Source pipeline: `{field(getattr(event, 'source_pipeline', None))}`",
+                f"- Source type: `{field(getattr(event, 'source_type', None))}`",
+                f"- Severity: `{field(getattr(event, 'severity', None))}`",
+                "- ACTIT remains the authoritative record; this MISP event is the governed sharing copy.",
+                "- MISP distribution is organisation-only and publication remains disabled by default.",
+                "- Extracted observables and automated ATT&CK candidates still require analyst review.",
+            ]
+        )
+        return {
+            "uuid": str(uuid.uuid5(cls.NAMESPACE, f"event-report:{event_uuid}")),
+            "name": "ACTIT provenance and source context",
+            "distribution": 0,
+            "content": content,
+        }

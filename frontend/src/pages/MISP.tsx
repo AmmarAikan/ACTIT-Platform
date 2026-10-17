@@ -251,6 +251,11 @@ export function MISPPage() {
         <span>{t('publishing')}: <strong>{t('no')}</strong></span>
       </div>
       {preview.data.tags.length > 0 && <div className="tag-list">{preview.data.tags.map((tag) => <code key={tag} dir="ltr">{tag}</code>)}</div>}
+      {preview.data.event_report && <details className="misp-event-report-preview">
+        <summary>{t('provenance')}</summary>
+        <h4>{preview.data.event_report.name}</h4>
+        <pre dir="auto">{preview.data.event_report.content}</pre>
+      </details>}
       {preview.data.omitted > 0 && <p>{t('omittedBreakdown', {
         references: number(preview.data.omitted_by_reason.external_reference || 0),
         invalid: number(preview.data.omitted_by_reason.invalid || 0),

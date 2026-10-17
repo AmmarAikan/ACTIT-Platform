@@ -634,6 +634,13 @@ class IntelligenceMISPAttributeResponse(BaseModel):
     to_ids: bool
 
 
+class IntelligenceMISPEventReportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str = Field(max_length=255)
+    distribution: Literal[0]
+    content: str = Field(max_length=7000)
+
+
 class IntelligenceMISPPreviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     event_id: str = Field(max_length=64)
@@ -643,6 +650,7 @@ class IntelligenceMISPPreviewResponse(BaseModel):
     distribution: Literal[0]
     attributes: list[IntelligenceMISPAttributeResponse]
     tags: list[str] = Field(max_length=100)
+    event_report: IntelligenceMISPEventReportResponse | None = None
     included: int = Field(ge=0)
     omitted: int = Field(ge=0)
     omitted_by_reason: dict[str, int]
@@ -683,6 +691,9 @@ class IntelligenceMISPDeliveryResponse(BaseModel):
     attributes_requested: int = Field(ge=0)
     attributes_added: int = Field(ge=0)
     attributes_verified: int = Field(ge=0)
+    event_reports_requested: int = Field(default=0, ge=0)
+    event_reports_added: int = Field(default=0, ge=0)
+    event_reports_verified: int = Field(default=0, ge=0)
     published: bool
     misp_event_id: str | None = Field(default=None, max_length=64)
     misp_event_uuid: str | None = Field(default=None, max_length=36)
@@ -697,6 +708,9 @@ class IntelligenceMISPBatchItemResponse(BaseModel):
     attributes_requested: int | None = Field(default=None, ge=0)
     attributes_added: int | None = Field(default=None, ge=0)
     attributes_verified: int | None = Field(default=None, ge=0)
+    event_reports_requested: int | None = Field(default=None, ge=0)
+    event_reports_added: int | None = Field(default=None, ge=0)
+    event_reports_verified: int | None = Field(default=None, ge=0)
     published: bool | None = None
     misp_event_id: str | None = Field(default=None, max_length=64)
     misp_event_uuid: str | None = Field(default=None, max_length=36)
@@ -728,6 +742,9 @@ class IntelligenceMISPDeliveryHistoryItem(BaseModel):
     attributes_requested: int | None = Field(default=None, ge=0)
     attributes_added: int | None = Field(default=None, ge=0)
     attributes_verified: int | None = Field(default=None, ge=0)
+    event_reports_requested: int | None = Field(default=None, ge=0)
+    event_reports_added: int | None = Field(default=None, ge=0)
+    event_reports_verified: int | None = Field(default=None, ge=0)
     published: bool | None = None
 
 
