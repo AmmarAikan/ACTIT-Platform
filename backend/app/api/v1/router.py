@@ -3007,8 +3007,22 @@ def run_correlations(
     db: SessionDep,
     user: Annotated[User, Depends(require_roles("admin", "analyst"))],
 ) -> dict[str, int]:
-    result = PipelineService(db).run_correlations(payload.similarity_threshold)
-    audit(db, user, "run_correlations", "correlation", details=result)
+    try:
+        result = PipelineService(db).run_correlations(
+            payload.similarity_threshold,
+            event_ids=payload.event_ids,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="One or more correlation events were not found.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    audit(
+        db,
+        user,
+        "run_correlations",
+        "correlation",
+        details={**result, "event_ids": payload.event_ids or []},
+    )
     db.commit()
     return result
 
