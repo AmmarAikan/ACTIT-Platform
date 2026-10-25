@@ -1,29 +1,77 @@
-# ACTIT: An AI-Assisted Cyber Threat Intelligence Tool for Integrating Internal Telemetry and External Threat Sources
+# ACTIT — AI-Assisted Cyber Threat Intelligence
 
-This repository now contains the backend foundation of the graduation-project CTI platform as well as the external-source collectors. The backend joins external CTI with internal Wazuh and Dionaea telemetry in one source-independent schema, persists the results, exposes an analyst API, correlates events, detects outlier sessions, and supports STIX export and optional MISP sharing.
+**From scattered security signals to a verifiable threat story.**
 
-## Backend status
+ACTIT is a full-stack Cyber Threat Intelligence platform developed as a collaborative graduation project. It brings external threat reporting and internal security telemetry into one analyst workspace, transforms raw observations into structured intelligence, and explains why events are related before intelligence is shared.
 
-- [x] FastAPI application and OpenAPI documentation
-- [x] PostgreSQL persistence with SQLite support for local tests
-- [x] Sources, raw items, threat events, indicators, entities, enrichments, correlations, outlier sessions, pipeline runs, users, and audit logs
-- [x] Wazuh `alerts.json` ingestion in JSON, JSONL, and NDJSON forms
-- [x] Authenticated Wazuh Indexer pull with bounded checkpointed pagination
-- [x] Dionaea `log_json` ingestion plus a live isolated VPS sensor and authenticated/HMAC API
-- [x] Lightweight VPS SSH-auth and gateway web-access JSON sensor ingestion
-- [x] VPS-hosted External Sources with private job control, scheduled JSON publish, and authenticated/HMAC pull
-- [x] 30-minute source-IP sessionization and session feature extraction
-- [x] Isolation Forest outlier detection with a clearly labeled small-sample fallback
-- [x] DNRTI BERT as the primary runtime NER model; DNRTI sklearn as the secondary fallback
-- [x] Explainable risk scoring, exact-indicator correlation, and TF-IDF similarity correlation
-- [x] NVD CVE enrichment, observable-first STIX 2.1 export, and live unpublished/verified MISP submission
-- [x] Cached/chunked BERT runtime and `/ml/status` held-out quality evidence
-- [x] Refanged IPv4/domain/URL extraction plus validated IPv6, ASN, and MAC observables
-- [x] Sentence-aware, type-bounded relationship extraction and repeatable PostgreSQL quality backfill
-- [x] Read-only live evaluation sampling, blind two-reviewer annotation, and adjudication-gated quality metrics
-- [x] Bearer authentication, admin/analyst/viewer roles, and audit logging
+The project answers a practical question: **how can an analyst move from disconnected feeds and logs to evidence-backed intelligence without hiding the reasoning inside a black box?**
 
-The backend is intentionally a graduation-project prototype. PostgreSQL is the central application database. FastAPI, PostgreSQL, DNRTI BERT, the sklearn fallback, External Sources, MISP 2.5.44, the CTI Gateway, Dionaea, the production frontend, and lightweight SSH/web sensors run on the VPS. No personal or collaborator computer is required at runtime. Wazuh Manager/Indexer/Dashboard are not deployed on the current 12 GB server; the tested Wazuh connector remains optional code for a future larger or separate host. The VPS-only production architecture and deployment procedure are documented in `docs/architecture/cloud_distributed_architecture.md` and `docs/operations/vps_production_runbook.md`; the live database result-quality audit and OpenCTI-inspired corrections are in `Parts Report/CTI_Result_Quality_Audit.md`.
+**Built for:** CTI analysts, SOC teams, security researchers, and educators who need traceable evidence from collection through investigation and sharing.
+
+[View live ACTIT](https://cti-gateway-vps.tailf2792f.ts.net/) · [Why ACTIT](#why-actit) · [How it works](#how-actit-works) · [What it delivers](#what-actit-delivers) · [Try the defense demo](#graduation-defense-demo) · [Read the architecture](docs/architecture/cloud_distributed_architecture.md)
+
+![ACTIT landing page showing the collect, analyze, correlate, and share workflow](documentation/working/deployment_evidence/production_processing_correlation_20261017T121557Z/browser/landing.png)
+
+## Why ACTIT?
+
+Security teams rarely lack data. The harder problem is that useful evidence arrives in separate places: advisories, vulnerability feeds, honeypot activity, authentication records, web-access logs, and analyst-submitted URLs. Reviewing each source independently makes it difficult to see the complete story or justify a decision.
+
+ACTIT closes that gap by focusing on four outcomes:
+
+- **Unify the evidence** — normalize external intelligence and internal telemetry into a shared CTI model while preserving source and provenance.
+- **Reduce manual analysis** — use classification, IoC extraction, Named Entity Recognition, relationship extraction, enrichment, and risk scoring to organize large volumes of raw material.
+- **Explain the connection** — show the observable, method, reason, score, and contributing events behind a correlation instead of presenting an unexplained alert.
+- **Keep the analyst in control** — separate collection, review, investigation, administration, and sharing through role-based access and audit records.
+
+## How ACTIT works
+
+```mermaid
+flowchart LR
+    A["External CTI<br/>CISA · CERT · NVD · RSS"] --> C["Normalize and validate"]
+    B["Internal telemetry<br/>Dionaea · SSH · Web · Wazuh"] --> C
+    C --> D["Extract intelligence<br/>IoCs · Entities · Relationships"]
+    D --> E["Correlate and prioritize<br/>Evidence · Risk · Outliers"]
+    E --> F["Analyst workspace<br/>Search · Review · Investigate"]
+    F --> G["Share safely<br/>STIX 2.1 · Reviewed MISP"]
+```
+
+AI assists the extraction and analysis stages; it does not replace provenance, deterministic controls, or analyst review. Every important result remains connected to its source records and supporting evidence.
+
+## What ACTIT delivers
+
+| Capability | Value to the analyst |
+|---|---|
+| Unified collection | External advisories, vulnerability sources, public reporting, manual URLs, honeypot events, authentication activity, web access, and optional Wazuh data enter one workflow. |
+| AI-assisted extraction | DNRTI BERT NER, a resilient sklearn fallback, IoC extraction, relevance classification, and relationship extraction turn text into structured intelligence. |
+| Explainable correlation | Exact-observable and text-similarity correlation retain the method, reason, score, source events, and evidence factors. |
+| Investigation workspace | The web interface exposes processing state, accepted records, events, indicators, relationships, correlations, outliers, ATT&CK context, and system readiness. |
+| Controlled sharing | Analysts can export observable-first STIX 2.1 and review MISP delivery rather than publishing automatically. |
+| Security and accountability | Bearer authentication, admin/analyst/viewer roles, privacy review, bounded collectors, and audit logging protect the workflow. |
+
+## Verified project status
+
+ACTIT is a **production-validated graduation-project prototype**, not a commercial SOC platform or a replacement for a SIEM. Its deployed VPS environment brings together the React frontend, FastAPI backend, PostgreSQL, External Sources, CTI Gateway, MISP, DNRTI NER, Dionaea, and lightweight SSH/web sensors. The Wazuh connector is implemented and tested, while the full Wazuh stack is intentionally not deployed on the current 12 GB host.
+
+The project has verified end-to-end processing, controlled cross-source correlations, role-based committee access, public HTTPS, STIX export, and reviewed MISP integration. Demonstration and controlled-validation records are explicitly identified rather than presented as organically observed attacks.
+
+- [Final production processing and correlation evidence](documentation/working/deployment_evidence/production_processing_correlation_20261017T121557Z/final-report.md)
+- [Implemented cloud architecture](docs/architecture/cloud_distributed_architecture.md)
+- [Current implementation status](IMPLEMENTATION_STATUS.md)
+- [Result-quality audit](Parts%20Report/CTI_Result_Quality_Audit.md)
+- [Security policy](SECURITY.md) and [contribution guide](CONTRIBUTING.md)
+
+## Detailed implementation highlights
+
+- FastAPI and OpenAPI with PostgreSQL persistence and SQLite-backed local tests.
+- External collectors for RSS, CERT advisories, CISA CSAF, vulnerability databases, Reddit, Hacker News, Telegram public previews, approved onion sources, and manual URLs.
+- Internal ingestion for Dionaea, SSH authentication, web access, Wazuh files, and authenticated Wazuh Indexer pagination.
+- DNRTI BERT NER with cached/chunked inference, a sklearn fallback, and held-out quality evidence through `/ml/status`.
+- Refanged IPv4, IPv6, domain, URL, ASN, MAC, and hash extraction plus sentence-aware typed relationships.
+- Explainable risk scoring, exact-indicator correlation, TF-IDF similarity correlation, sessionization, and Isolation Forest outlier detection.
+- NVD CVE enrichment, observable-first STIX 2.1 export, and optional reviewed MISP submission.
+- Durable external-ingestion operations, auditable pipeline runs, role-based access, privacy controls, and failure isolation.
+
+The detailed deployment procedure is documented in [`docs/operations/vps_production_runbook.md`](docs/operations/vps_production_runbook.md). Heavy optional infrastructure and future boundaries are documented in [`docs/architecture/future_bound_work.md`](docs/architecture/future_bound_work.md).
 
 ## Graduation defense demo
 
@@ -81,7 +129,7 @@ The former top-level prototype has been retired. Do not create a parallel implem
 
 The canonical package provides bounded connectors for RSS, CERT advisories, CISA CSAF JSON, vulnerability databases, Reddit, Hacker News, Telegram public previews, and operator-approved onion sources. It also provides generic HTML crawling, strict JSON collection adaptation, manual URL routing, cleaning, privacy review, relevance classification, incremental SHA-256 state, run-scoped export, and an internal FastAPI integration adapter.
 
-In the implemented VPS-only deployment, this canonical package runs as a hardened loopback service on `127.0.0.1:8090`. A systemd timer collects enabled sources and publishes validated JSON to the CTI Gateway every two hours. The same-host Central Backend reaches Gateway, External Control, and MISP over dedicated pairwise internal Docker networks. The production frontend uses only authenticated Central Backend routes and is exposed privately through Tailscale Serve. SSH forwarding remains a diagnostic recovery path. See `docs/operations/vps_external_sources.md`.
+In the implemented VPS-only deployment, this canonical package runs as a hardened loopback service on `127.0.0.1:8090`. A systemd timer collects enabled sources and publishes validated JSON to the CTI Gateway every two hours. The same-host Central Backend reaches Gateway, External Control, and MISP over dedicated pairwise internal Docker networks. The production frontend uses authenticated Central Backend routes and is published through the verified public HTTPS ingress, while control and data services remain private. SSH forwarding remains a diagnostic recovery path. See `docs/operations/vps_external_sources.md`.
 
 Accepted handoff artifacts are validated against the schemas in `contracts/`. Runtime state and outputs belong under `data/external/`; they are local operational files, not central storage.
 
