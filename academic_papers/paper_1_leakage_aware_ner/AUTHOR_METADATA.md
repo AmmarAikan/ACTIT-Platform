@@ -2,8 +2,8 @@
 
 ## Confirmed Arabic names
 
-1. علاءالدين الشويع
-2. عمار عيقان
+1. عمار عيقان
+2. علاءالدين الشويع
 3. منيف العميسي
 
 ## Supervisor
@@ -19,9 +19,9 @@
 
 ## Provisional English spellings used in the manuscript
 
-1. Alaa Aldeen Al-Shuwaie
-2. Ammar Aiqan
-3. Muneef Al-Omaisi
+1. Ammar Aikan
+2. Alaaldeen AL-Shuwaie
+3. Munif AL-Omisi
 4. Supervisor: Dr. Raed Al-Dhabhani
 
 These Latin spellings must be checked against each person's passport, previous publications, university record, or ORCID before external submission. Changing the spelling later does not affect the scientific content.

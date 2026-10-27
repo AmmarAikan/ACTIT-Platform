@@ -4,4 +4,7 @@ Dockerfile* text eol=lf
 *.yml text eol=lf
 infra/vps/systemd/* text eol=lf
 infra/vps/logrotate/* text eol=lf
+*.pdf binary
+*.docx binary
+*.tar.gz binary
 

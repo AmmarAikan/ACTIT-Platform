@@ -54,7 +54,7 @@ def public_flow(browser: Browser, base_url: str) -> None:
     page.goto("/")
     repository = page.get_by_role("link", name="Open the ACTIT source repository on GitHub in a new tab")
     repository.wait_for()
-    require(repository.get_attribute("href") == "https://github.com/AmmarAikan/CTI-Tool", "public repository href is incorrect")
+    require(repository.get_attribute("href") == "https://github.com/AmmarAikan/ACTIT-Platform", "public repository href is incorrect")
     require(repository.get_attribute("target") == "_blank", "public repository link does not open a new tab")
     require("noreferrer" in (repository.get_attribute("rel") or ""), "public repository link is missing noreferrer")
 

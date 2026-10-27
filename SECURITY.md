@@ -8,7 +8,7 @@ Security fixes target the current `main` branch. Historical branches, local expe
 
 ## Report a Vulnerability Privately
 
-Use GitHub's [private vulnerability reporting form](https://github.com/AmmarAikan/CTI-Tool/security/advisories/new). Do not open a public issue for a vulnerability that could expose credentials, private data, infrastructure details, or a working exploit.
+Use GitHub's [private vulnerability reporting form](https://github.com/AmmarAikan/ACTIT-Platform/security/advisories/new). Do not open a public issue for a vulnerability that could expose credentials, private data, infrastructure details, or a working exploit.
 
 Include only the information needed to reproduce and assess the issue:
 

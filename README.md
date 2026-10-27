@@ -60,6 +60,14 @@ The project has verified end-to-end processing, controlled cross-source correlat
 - [Result-quality audit](Parts%20Report/CTI_Result_Quality_Audit.md)
 - [Security policy](SECURITY.md) and [contribution guide](CONTRIBUTING.md)
 
+## Final project materials
+
+The final graduation-project documentation and poster are available in [`project_deliverables/`](project_deliverables/). The recorded project demonstration is distributed with the [final project release](https://github.com/AmmarAikan/ACTIT-Platform/releases/tag/actit-final-deliverables-20261027) rather than stored in Git history.
+
+- [Project documentation (PDF)](project_deliverables/ACTIT_Project_Documentation.pdf)
+- [Project poster (PDF)](project_deliverables/ACTIT_Project_Poster.pdf)
+- [Project announcement on LinkedIn](https://lnkd.in/p/dRvgXpgw)
+
 ## Detailed implementation highlights
 
 - FastAPI and OpenAPI with PostgreSQL persistence and SQLite-backed local tests.
@@ -307,6 +315,12 @@ Only records from the intended run/checkpoint set are merged. Invalid, privacy-a
 - `tests/external_sources/` — canonical External Sources tests
 
 Any required shared-contract change must be reported and approved before modifying shared or other-team modules.
+
+## Project team
+
+1. [Ammar Aikan](https://github.com/AmmarAikan)
+2. [Alaaldeen AL-Shuwaie](https://github.com/Alshowie2026)
+3. [Munif AL-Omisi](https://github.com/munifaomisi)
 
 ## License
 
