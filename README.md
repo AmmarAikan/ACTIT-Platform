@@ -1,4 +1,4 @@
-# ACTIT — AI-Assisted Cyber Threat Intelligence
+# ACTIT — Unified AI-Assisted Cyber Threat Intelligence Platform
 
 **From scattered security signals to a verifiable threat story.**
 
