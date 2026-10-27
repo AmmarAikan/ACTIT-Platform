@@ -78,3 +78,6 @@ data/external/review/*
 data/external/state/*
 data/external/exports/*
 !data/external/**/.gitkeep
+/academic_papers/
+/documentation/
+/social_media/

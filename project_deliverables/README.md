@@ -1,11 +1,12 @@
 # ACTIT Final Project Deliverables
 
-This directory contains the final presentation materials for **ACTIT — Unified AI-Assisted Cyber Threat Intelligence Platform**.
+This directory contains the final presentation materials for **ACTIT â€” Unified AI-Assisted Cyber Threat Intelligence Platform**.
 
 ## Included here
 
-- [`ACTIT_Project_Documentation.pdf`](ACTIT_Project_Documentation.pdf) — final project documentation.
-- [`ACTIT_Project_Poster.pdf`](ACTIT_Project_Poster.pdf) — graduation-project poster.
+- [`ACTIT_Project_Documentation_Final.pdf`](ACTIT_Project_Documentation_Final.pdf) â€” final revised documentation incorporating the graduation-project examinersâ€™ discussion notes and requested corrections.
+- [`ACTIT_Project_Documentation.pdf`](ACTIT_Project_Documentation.pdf) â€” documentation version submitted before the final examiner revisions.
+- [`ACTIT_Project_Poster.pdf`](ACTIT_Project_Poster.pdf) â€” graduation-project poster.
 
 ## Demonstration video
 
