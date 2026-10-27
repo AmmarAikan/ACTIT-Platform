@@ -26,7 +26,6 @@ export function SystemReadiness() {
     queryKey: ['internal-health', id], queryFn: () => api.internalHealth(id), retry: false,
   })) });
   const misp = useQuery({ queryKey: ['misp-health'], queryFn: api.mispHealth, retry: false });
-  const ml = useQuery({ queryKey: ['ml-status'], queryFn: api.mlStatus, retry: false });
   const summary = useQuery({ queryKey: ['dashboard-summary'], queryFn: api.dashboardSummary, retry: false });
 
   const checks: Check[] = [];
@@ -50,15 +49,6 @@ export function SystemReadiness() {
     state: !misp.data.configured ? 'unconfigured' : misp.data.reachable ? 'healthy' : 'unavailable',
     detail: t('readinessMispDetail'),
   });
-  if (ml.data) checks.push({
-    id: 'ml', title: t('readinessModel'),
-    state: ml.data.backend === 'transformer' && ml.data.quality_gates_passed ? 'healthy'
-      : !ml.data.primary_loaded && !ml.data.secondary_loaded ? 'unavailable' : 'degraded',
-    detail: t('readinessModelDetail', {
-      backend: ml.data.backend,
-      quality: t(ml.data.quality_gates_passed ? 'successful' : 'degraded'),
-    }),
-  });
   if (summary.data) {
     const externalCount = summary.data.by_pipeline.external || 0;
     const internalCount = summary.data.by_pipeline.internal || 0;
@@ -72,11 +62,11 @@ export function SystemReadiness() {
     });
   }
 
-  const loading = [system, external, misp, ml, summary, ...internal].some((query) => query.isLoading);
-  const failed = [system, external, misp, ml, summary, ...internal].some((query) => query.isError);
+  const loading = [system, external, misp, summary, ...internal].some((query) => query.isLoading);
+  const failed = [system, external, misp, summary, ...internal].some((query) => query.isError);
   const refresh = () => {
     void system.refetch(); void external.refetch(); void misp.refetch();
-    void ml.refetch(); void summary.refetch();
+    void summary.refetch();
     internal.forEach((query) => void query.refetch());
   };
 

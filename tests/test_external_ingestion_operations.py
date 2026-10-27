@@ -56,7 +56,7 @@ def engine():
 
 class Client:
     def get_job(self, job_id):
-        return {"state": "completed", "result": {"accepted_records": 0, "export": {
+        return {"state": "completed", "result": {"accepted_records": 15, "export": {
             "status": "completed", "run_id": IDENTITY[1], "dataset_sha256": IDENTITY[2],
             "accepted_records": 15}}}
 
@@ -267,11 +267,26 @@ class ExternalIngestionOperationTests(unittest.TestCase):
             with Session(concurrent_db) as session:
                 self.assertEqual(session.scalar(select(func.count()).select_from(ExternalIngestionOperation)), 1)
 
-    def test_zero_new_collection_preserves_completed_export_count(self):
+    def test_repeated_command_does_not_implicitly_retry_failed_operation(self):
         with Session(engine()) as session:
             operation = ExternalIngestionService(session, Client()).create_or_resume(IDENTITY[0])
-            self.assertEqual(operation.collected_count, 0)
-            self.assertEqual(operation.exported_count, 15)
+            operation.state, operation.stage = "failed_retryable", "export_ready"
+            operation.error_code, operation.error_category = "gateway_publish_failed", "export_ready"
+            session.commit()
+            resumed = ExternalIngestionService(session, Client()).create_or_resume(IDENTITY[0])
+            self.assertEqual(resumed.id, operation.id)
+            self.assertEqual((resumed.state, resumed.stage), ("failed_retryable", "export_ready"))
+            self.assertEqual(resumed.error_code, "gateway_publish_failed")
+
+    def test_zero_new_collection_never_imports_a_historical_export(self):
+        client = Client()
+        client.get_job = Mock(return_value={"state": "completed", "result": {
+            "accepted_records": 0, "export": {"status": "completed", "run_id": IDENTITY[1],
+                "dataset_sha256": IDENTITY[2], "accepted_records": 15}}})
+        with Session(engine()) as session:
+            with self.assertRaisesRegex(ValueError, "external_job_no_new_records"):
+                ExternalIngestionService(session, client).create_or_resume(IDENTITY[0])
+            self.assertEqual(session.scalar(select(func.count()).select_from(ExternalIngestionOperation)), 0)
 
     def test_database_claim_is_atomic_and_stale_lease_is_recoverable(self):
         db = engine()
@@ -416,7 +431,7 @@ class ExternalIngestionOperationTests(unittest.TestCase):
 
     def test_digest_conflict_fails_closed(self):
         client = Client()
-        client.get_job = Mock(return_value={"state": "completed", "result": {"export": {
+        client.get_job = Mock(return_value={"state": "completed", "result": {"accepted_records": 1, "export": {
             "run_id": IDENTITY[1], "dataset_sha256": "not-a-digest"}}})
         with Session(engine()) as session:
             with self.assertRaisesRegex(ValueError, "external_job_export_invalid"):

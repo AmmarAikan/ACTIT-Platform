@@ -837,11 +837,16 @@ class LocalCollectionExportCoordinator(CollectionExportCoordinator):
         return captured
 
     def export(self, run_id: str, started_at: str, results: tuple[SourceExecutionResult, ...]) -> dict[str, Any]:
+        """Export only records produced by this registered-source command.
+
+        Active Manual URL checkpoints belong to the explicit unified/manual
+        export lifecycle. Including them here makes a zero-result source job
+        appear to have exportable work and breaks the job/run/export identity
+        that Central relies on for idempotent ingestion.
+        """
         manifest = RunManifest(run_id=run_id, started_at=started_at)
         outputs = tuple(RunSourceOutput(run_id, value.source_id, value.status, value.accepted, value.review, value.errors)
                         for value in results)
-        manual = self.manual_sink.accepted()
-        if manual: outputs += (RunSourceOutput(run_id, "manual_url", "completed", manual),)
         exported = self.exporter.export(manifest, outputs)
         return {"status": "completed", "run_id": run_id, "dataset_sha256": exported.manifest["dataset_sha256"],
                 "accepted_records": exported.manifest["accepted_records"], "review_records": exported.manifest["review_records"]}

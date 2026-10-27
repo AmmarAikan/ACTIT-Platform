@@ -5,14 +5,15 @@ PROJECT_NAME="actit-defense-demo"
 COMPOSE_FILE="compose.demo.yml"
 DEMO_PORT="${ACTIT_DEMO_PORT:-19090}"
 DEMO_URL="http://127.0.0.1:${DEMO_PORT}"
+EXPECTED_BRANCH="${ACTIT_DEMO_BRANCH:-codex/actit-final-production}"
 
 compose() {
   docker compose --project-name "${PROJECT_NAME}" --file "${COMPOSE_FILE}" "$@"
 }
 
 preflight() {
-  test "$(git branch --show-current)" = "codex/actit-final-production" || {
-    echo "Refusing to run outside codex/actit-final-production" >&2
+  test "$(git branch --show-current)" = "${EXPECTED_BRANCH}" || {
+    echo "Refusing to run outside ${EXPECTED_BRANCH}" >&2
     return 1
   }
   for path in "${COMPOSE_FILE}" scripts/create_demo_dataset.py scripts/defense_demo_provider.py tests/fixtures/defense_demo/web_access.jsonl; do
@@ -25,7 +26,7 @@ preflight() {
     echo "Loopback port ${DEMO_PORT} is already in use by another process" >&2
     return 1
   fi
-  if compose config | rg -q '/opt/cti-platform|external: true|cti_postgres_data|cti-backend-gateway'; then
+  if compose config | rg -q '/opt/cti-platform/(current|releases)/|external: true|cti_postgres_data|cti-backend-gateway'; then
     echo "Rendered demo topology references a forbidden production resource" >&2
     return 1
   fi

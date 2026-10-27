@@ -30,8 +30,8 @@ the stable name `ACTIT-Platform` / `actit-platform`.
 
 The following checks were run from a clean integration worktree:
 
-- Python repository suite: 549 tests passed.
-- Frontend suite: 22 files and 169 tests passed.
+- Python repository suite after integration with `main`: 554 tests passed.
+- Frontend suite after integration with `main`: 22 files and 174 tests passed.
 - TypeScript type/lint check: passed.
 - Frontend production build with Vite 8.3.5: passed.
 - npm production and complete dependency audits: 0 vulnerabilities.

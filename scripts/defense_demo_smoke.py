@@ -20,19 +20,19 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
-def new_page(browser: Browser, base_url: str) -> Page:
+def new_page(browser: Browser, base_url: str, language: str = "en") -> Page:
     context = browser.new_context(base_url=base_url, accept_downloads=True)
     page = context.new_page()
-    page.add_init_script("sessionStorage.setItem('cti_language', 'en')")
+    page.add_init_script(f"sessionStorage.setItem('cti_language', '{language}')")
     return page
 
 
-def login(page: Page, role: str) -> None:
+def login(page: Page, role: str, language: str = "en") -> None:
     username, password = ACCOUNTS[role]
     page.goto("/login")
     page.locator("#username").fill(username)
     page.locator("#password").fill(password)
-    page.get_by_role("button", name="Sign in", exact=True).click()
+    page.get_by_role("button", name="Sign in" if language == "en" else "تسجيل الدخول", exact=True).click()
     page.wait_for_url("**/dashboard")
     page.get_by_text(username, exact=True).wait_for()
 
@@ -47,6 +47,34 @@ def api_json(page: Page, path: str, method: str = "GET") -> tuple[int, Any]:
         }""",
         {"path": path, "method": method},
     )
+
+
+def public_flow(browser: Browser, base_url: str) -> None:
+    page = new_page(browser, base_url)
+    page.goto("/")
+    repository = page.get_by_role("link", name="Open the ACTIT source repository on GitHub in a new tab")
+    repository.wait_for()
+    require(repository.get_attribute("href") == "https://github.com/AmmarAikan/CTI-Tool", "public repository href is incorrect")
+    require(repository.get_attribute("target") == "_blank", "public repository link does not open a new tab")
+    require("noreferrer" in (repository.get_attribute("rel") or ""), "public repository link is missing noreferrer")
+
+    page.goto("/login")
+    page.get_by_role("heading", name="Demo access", exact=True).wait_for()
+    page.get_by_text("demo-viewer", exact=True).wait_for()
+    page.get_by_text("ViewerDemo!2026", exact=True).wait_for()
+    page.get_by_text("demo-analyst", exact=True).wait_for()
+    page.get_by_text("AnalystDemo!2026", exact=True).wait_for()
+    require(page.get_by_text("demo-admin", exact=True).count() == 0, "admin credentials are visible on the public login page")
+
+    page.context.close()
+
+    arabic_page = new_page(browser, base_url, "ar")
+    arabic_page.goto("/login")
+    arabic_page.get_by_role("heading", name="وصول العرض التجريبي", exact=True).wait_for()
+    require(arabic_page.locator("html").get_attribute("dir") == "rtl", "Arabic public login is not RTL")
+    arabic_page.get_by_text("demo-viewer", exact=True).wait_for()
+    arabic_page.get_by_text("demo-analyst", exact=True).wait_for()
+    arabic_page.context.close()
 
 
 def viewer_flow(browser: Browser, base_url: str) -> None:
@@ -69,9 +97,19 @@ def viewer_flow(browser: Browser, base_url: str) -> None:
 def analyst_flow(browser: Browser, base_url: str, reviews_mode: str) -> None:
     page = new_page(browser, base_url)
     login(page, "analyst")
+    require(page.locator("#primary-navigation").get_by_text("Analysis Runs", exact=True).count() == 0, "Analysis Runs remains in normal navigation")
     page.goto("/system/readiness")
     page.get_by_role("heading", name="System Readiness", level=2).wait_for()
     page.get_by_text("Central database", exact=True).wait_for()
+    require(page.get_by_text("Extraction model", exact=True).count() == 0, "Extraction Model remains on System Readiness")
+
+    page.goto("/intelligence/events")
+    page.get_by_role("heading", name="Events", level=2).wait_for()
+    event_link = page.get_by_role("link", name="[DEMO] Public advisory mentions T1059.001", exact=True)
+    event_link.wait_for()
+    event_link.click()
+    page.wait_for_url(f"**/intelligence/events/{EVENT_ID}")
+    page.get_by_text("CVE-2026-1234", exact=False).first.wait_for()
 
     page.goto("/intelligence/search?q=CVE-2026-1234")
     page.get_by_text('Results for “CVE-2026-1234”', exact=True).wait_for()
@@ -83,6 +121,12 @@ def analyst_flow(browser: Browser, base_url: str, reviews_mode: str) -> None:
     page.goto(f"/intelligence/events/{ATTACK_CANDIDATE_ID}")
     page.get_by_text("Automated candidate for review", exact=False).wait_for()
     page.get_by_text("T1053", exact=False).wait_for()
+
+    page.goto("/intelligence/attack")
+    page.get_by_role("heading", name="MITRE ATT&CK", level=2).wait_for()
+    page.locator("#attack-event-select").select_option(ATTACK_CANDIDATE_ID)
+    page.get_by_text("T1053", exact=False).wait_for()
+    page.get_by_text("Automated candidate for review", exact=False).wait_for()
 
     page.goto("/intelligence/outliers")
     page.get_by_text("Credential attempts", exact=False).wait_for()
@@ -115,7 +159,26 @@ def analyst_flow(browser: Browser, base_url: str, reviews_mode: str) -> None:
         status, pull = api_json(page, "/api/v1/integrations/web-access/pull", method="POST")
         require(status == 200 and pull.get("pipeline") == "internal", "isolated Web Access pull failed")
         require(pull.get("failed_count") == 0, "isolated Web Access pull reported failures")
+
     page.context.close()
+
+    arabic_page = new_page(browser, base_url, "ar")
+    login(arabic_page, "analyst", "ar")
+    arabic_page.goto("/system/readiness")
+    arabic_page.get_by_role("heading", name="جاهزية النظام", level=2).wait_for()
+    require(arabic_page.locator("html").get_attribute("dir") == "rtl", "Arabic authenticated interface is not RTL")
+    require(arabic_page.get_by_text("نموذج الاستخراج", exact=True).count() == 0, "Arabic Extraction Model remains on System Readiness")
+    arabic_page.goto("/intelligence/events")
+    arabic_page.get_by_role("link", name="[DEMO] Public advisory mentions T1059.001", exact=True).wait_for()
+    require(arabic_page.locator('[role="alert"]').count() == 0, "Arabic Events rendered an error state")
+    arabic_page.goto(f"/intelligence/storyline/{EVENT_ID}")
+    arabic_page.get_by_role("heading", name="[DEMO] Public advisory mentions T1059.001", level=2, exact=True).wait_for()
+    require(arabic_page.locator('[role="alert"]').count() == 0, "Arabic Storyline rendered an error state")
+    arabic_page.goto("/intelligence/attack")
+    arabic_page.locator("#attack-event-select").select_option(EVENT_ID)
+    arabic_page.locator(".attack-results").get_by_text("T1059.001", exact=True).wait_for()
+    require(arabic_page.locator('[role="alert"]').count() == 0, "Arabic ATT&CK rendered an error state")
+    arabic_page.context.close()
 
 
 def admin_flow(browser: Browser, base_url: str) -> None:
@@ -145,6 +208,7 @@ def main() -> None:
         browser = playwright.chromium.launch(headless=True)
         try:
             if args.reviews_mode == "available":
+                public_flow(browser, args.base_url)
                 viewer_flow(browser, args.base_url)
                 admin_flow(browser, args.base_url)
             analyst_flow(browser, args.base_url, args.reviews_mode)

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl
 
@@ -51,6 +51,9 @@ class SourceCreate(BaseModel):
 
 class CorrelationRequest(BaseModel):
     similarity_threshold: float = Field(default=0.35, ge=0.0, le=1.0)
+    event_ids: list[
+        Annotated[str, Field(min_length=28, max_length=28, pattern=r"^cti-[a-f0-9]{24}$")]
+    ] | None = Field(default=None, min_length=2, max_length=100)
 
 
 class MISPSendRequest(BaseModel):

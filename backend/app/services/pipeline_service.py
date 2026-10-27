@@ -867,12 +867,29 @@ class PipelineService:
             self.session.rollback()
             raise RuntimeError(f"Internal {source_name} pipeline failed: {exc}") from exc
 
-    def run_correlations(self, similarity_threshold: float = 0.35, *, commit: bool = True) -> dict[str, int]:
-        events = list(
-            self.session.scalars(
-                select(ThreatEvent).options(selectinload(ThreatEvent.indicators))
-            ).unique()
-        )
+    def run_correlations(
+        self,
+        similarity_threshold: float = 0.35,
+        *,
+        event_ids: list[str] | None = None,
+        commit: bool = True,
+    ) -> dict[str, int]:
+        query = select(ThreatEvent).options(selectinload(ThreatEvent.indicators))
+        requested_ids: list[str] | None = None
+        if event_ids is not None:
+            requested_ids = list(dict.fromkeys(event_ids))
+            if len(requested_ids) < 2:
+                raise ValueError("at least two distinct event IDs are required")
+            query = query.where(ThreatEvent.id.in_(requested_ids))
+        loaded = list(self.session.scalars(query).unique())
+        if requested_ids is None:
+            events = loaded
+        else:
+            by_id = {event.id: event for event in loaded}
+            missing = [event_id for event_id in requested_ids if event_id not in by_id]
+            if missing:
+                raise LookupError("one or more correlation events were not found")
+            events = [by_id[event_id] for event_id in requested_ids]
         simple = SimpleCorrelator().correlate(events)
         similarity = SimilarityCorrelator(similarity_threshold).correlate(events)
         for candidate in [*simple, *similarity]:
@@ -885,13 +902,16 @@ class PipelineService:
                 candidate.evidence,
             )
         self.session.flush()
-        recalculated = self._recalculate_risk_scores()
+        recalculated = self._recalculate_risk_scores(
+            {event.id for event in events} if requested_ids is not None else None
+        )
         if commit:
             self.session.commit()
         return {
             "simple": len(simple),
             "similarity": len(similarity),
             "total": len(simple) + len(similarity),
+            "events_considered": len(events),
             "risk_recalculated": recalculated,
         }
 

@@ -11,7 +11,6 @@ const drilldowns = [
   { to: '/intelligence/events', key: 'events' },
   { to: '/intelligence/indicators', key: 'indicators' },
   { to: '/external-sources', key: 'sources' },
-  { to: '/analysis', key: 'analysisRuns' },
 ] as const;
 
 export function DashboardInvestigation() {
