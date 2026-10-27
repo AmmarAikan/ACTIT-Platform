@@ -132,6 +132,24 @@ class ManualSourceServiceTests(unittest.TestCase):
         self.assertNotIn(url, str(roots[0].safe_dict()))
         self.assertEqual(state["tracked_roots"][roots[0].root_id]["origin"], "explicit")
 
+    def test_resubmitting_removed_root_clears_tombstone_and_lists_it_again(self):
+        url = "https://example.test/report"
+        with tempfile.TemporaryDirectory() as folder:
+            manager = JsonStateManager(Path(folder) / "state.json")
+            service = self.service(FakeCrawler([crawl(url), CrawlResult(url, url, "unchanged")]), manager)
+            service.add_manual_source(url, requested_by="tester")
+            root_id = service.list_tracked_roots()[0].root_id
+            service.remove_tracked_root(root_id)
+            self.assertEqual(service.list_tracked_roots(), ())
+
+            service.add_manual_source(url, requested_by="tester")
+            roots = service.list_tracked_roots()
+            state = manager.load()
+
+        self.assertEqual([root.root_id for root in roots], [root_id])
+        self.assertTrue(roots[0].active)
+        self.assertIsNone(state["tracked_roots"][root_id]["removed_at"])
+
     def test_listing_children_are_not_registered_as_roots(self):
         listing = "https://example.test/index"
         children = ("https://example.test/article-one", "https://example.test/article-two")

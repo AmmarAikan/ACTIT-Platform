@@ -39,15 +39,19 @@ SYNTHETIC = {
 }
 
 
-def render_compose(path: Path) -> dict:
+def render_compose(path: Path, *, profiles: tuple[str, ...] = ()) -> dict:
     environment = os.environ.copy()
     for name in tuple(environment):
         if name.startswith("MISP_") or name.startswith("WAZUH_"):
             environment.pop(name)
     environment.pop("COMPOSE_PROJECT_NAME", None)
     environment.update(SYNTHETIC)
+    command = ["docker", "compose", "-f", str(path)]
+    for profile in profiles:
+        command.extend(["--profile", profile])
+    command.extend(["config", "--format", "json"])
     completed = subprocess.run(
-        ["docker", "compose", "-f", str(path), "config", "--format", "json"],
+        command,
         cwd=ROOT,
         env=environment,
         text=True,
@@ -77,6 +81,7 @@ class VPSLocalNetworkTopologyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.central = render_compose(CENTRAL_COMPOSE)
+        cls.central_all_profiles = render_compose(CENTRAL_COMPOSE, profiles=("*",))
         cls.vps = render_compose(VPS_COMPOSE)
         cls.bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
         cls.provisioner = PROVISIONER.read_text(encoding="utf-8")
@@ -92,6 +97,20 @@ class VPSLocalNetworkTopologyTests(unittest.TestCase):
                     definition = compose["networks"][key]
                     self.assertIs(definition["external"], True)
                     self.assertEqual(definition["name"], stable_name)
+
+    def test_local_project_name_and_adminer_are_stable_and_loopback_only(self) -> None:
+        self.assertEqual(self.central["name"], "actit-platform")
+        adminer = self.central_all_profiles["services"]["adminer"]
+        self.assertEqual(adminer["profiles"], ["database-ui"])
+        self.assertEqual(adminer["environment"]["ADMINER_DEFAULT_SERVER"], "db")
+        self.assertEqual(
+            published_ports(self.central_all_profiles, "adminer"),
+            {("127.0.0.1", "8080", 8080, "tcp")},
+        )
+        self.assertEqual(
+            set(service_networks(self.central_all_profiles, "adminer")),
+            {"default"},
+        )
 
     def test_rendered_membership_is_exactly_pairwise(self) -> None:
         membership: dict[str, set[str]] = {key: set() for key in NETWORKS}

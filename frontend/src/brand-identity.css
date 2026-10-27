@@ -1,0 +1,120 @@
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.public-brand > .brand-lockup {
+  display: inline-flex;
+}
+
+.brand-lockup-symbol {
+  display: block;
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 12px rgb(54 211 235 / .18));
+}
+
+.brand-lockup-copy {
+  display: grid;
+  gap: 2px;
+  line-height: 1.1;
+}
+
+.brand-lockup-copy strong {
+  color: #f2fbff;
+  font: 800 17px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .16em;
+}
+
+.brand-lockup-copy small {
+  color: #6f8fa3;
+  font: 650 8px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .055em;
+  white-space: nowrap;
+}
+
+.brand-symbol-image {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.landing-brand-signature {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 26px;
+  padding: 8px 14px 8px 8px;
+  border: 1px solid rgb(46 158 180 / .22);
+  border-radius: 14px;
+  background: rgb(8 28 42 / .54);
+  box-shadow: inset 0 0 24px rgb(17 173 199 / .035);
+}
+
+.landing-brand-signature > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.landing-brand-signature strong {
+  color: #eefdff;
+  font: 800 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .16em;
+}
+
+.landing-brand-signature small {
+  color: #668ba0;
+  font: 650 8px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .075em;
+}
+
+.auth-brand-signature {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 14px;
+  padding: 10px 16px 10px 10px;
+  border: 1px solid rgb(45 173 190 / .22);
+  border-radius: 15px;
+  background: rgb(9 31 45 / .58);
+}
+
+.auth-brand-signature .brand-mark {
+  width: 52px;
+  height: 52px;
+}
+
+.auth-brand-signature .brand-symbol-image {
+  width: 48px;
+  height: 48px;
+}
+
+.auth-brand-signature > span:last-child {
+  color: #effcff;
+  font: 850 20px ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .2em;
+}
+
+:root[data-theme="light"] .brand-lockup-copy strong,
+:root[data-theme="light"] .landing-brand-signature strong {
+  color: #123349;
+}
+
+:root[data-theme="light"] .landing-brand-signature {
+  border-color: rgb(22 118 130 / .2);
+  background: rgb(255 255 255 / .7);
+}
+
+@media (max-width: 620px) {
+  .brand-lockup-symbol { width: 42px; height: 42px; }
+  .brand-lockup-copy small { display: none; }
+  .landing-brand-signature small { font-size: 7px; }
+}

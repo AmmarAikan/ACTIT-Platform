@@ -555,6 +555,7 @@ class CanonicalManualSourceService(ManualSourceService):
             "canonical_url": canonical,
             "active": True,
             "origin": "explicit",
+            "removed_at": None,
             "added_at": previous.get("added_at") or now,
             "last_submitted_at": now,
         }

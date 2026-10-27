@@ -1,4 +1,4 @@
-# ACTIT: An AI-Assisted Cyber Threat Intelligence Tool for Integrating Internal Telemetry and External Threat Sources
+# ACTIT — Unified AI-Assisted Cyber Threat Intelligence Platform
 
 This repository now contains the backend foundation of the graduation-project CTI platform as well as the external-source collectors. The backend joins external CTI with internal Wazuh and Dionaea telemetry in one source-independent schema, persists the results, exposes an analyst API, correlates events, detects outlier sessions, and supports STIX export and optional MISP sharing.
 
@@ -259,3 +259,14 @@ Only records from the intended run/checkpoint set are merged. Invalid, privacy-a
 - `tests/external_sources/` — canonical External Sources tests
 
 Any required shared-contract change must be reported and approved before modifying shared or other-team modules.
+
+## License
+
+Original ACTIT software and associated documentation authored by the project
+contributors are available under the [MIT License](LICENSE).
+
+Third-party datasets, model artifacts, research papers, reference documents,
+dependencies, and other externally sourced materials retain their respective
+terms and are not relicensed by ACTIT. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for the repository-level
+scope notice.
