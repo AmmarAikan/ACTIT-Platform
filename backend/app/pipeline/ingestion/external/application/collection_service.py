@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 import secrets
 import threading
@@ -87,7 +88,8 @@ class SourceExecutor(Protocol):
 class CollectionJobRunner(Protocol):
     def submit(self, command_id: str, operation: Callable[[], Any], *, safe_context: dict[str, str] | None = None,
                cancellation_event: threading.Event | None = None,
-               on_queued_cancel: Callable[[], None] | None = None) -> Any: ...
+               on_queued_cancel: Callable[[], None] | None = None,
+               execution_class: str = "interactive") -> Any: ...
 
 
 class CollectionExportCoordinator(Protocol):
@@ -122,11 +124,25 @@ class CanonicalCollectionService(CollectionService):
         self.manual_service = manual_service
         self.dynamic_source=dynamic_source
         self.all_enabled_lock = all_enabled_lock or threading.Lock()
+        self._source_locks: dict[str, threading.Lock] = {}
+        self._source_locks_guard = threading.Lock()
+
+    @contextmanager
+    def _source_guard(self, source_id: str):
+        with self._source_locks_guard:
+            lock = self._source_locks.setdefault(source_id, threading.Lock())
+        with lock:
+            yield
 
     def start_collection(self, request: CollectionRequest) -> JobAccepted:
         if request.scope == "all_enabled" and request.source_ids:
             raise CollectionRequestError("scope=all_enabled cannot be combined with source_ids")
         source_ids = self._validated_ids(request.source_ids)
+        execution_class = request.options.get("execution_class", "interactive")
+        if execution_class not in {"interactive", "background"}:
+            raise CollectionRequestError("unsupported execution class")
+        if request.scope != "all_enabled" and execution_class == "background":
+            raise CollectionRequestError("background execution requires scope=all_enabled")
         command_id = f"cmd-{secrets.token_hex(12)}"
         run_id, started_at = generate_run_id(), utc_now_iso()
         if request.scope == "all_enabled":
@@ -138,14 +154,15 @@ class CanonicalCollectionService(CollectionService):
                     source_ids, force=request.force, command_id=command_id, run_id=run_id,
                     started_at=started_at, cancellation=cancellation),
                     safe_context={"source_id": "all_enabled"}, cancellation_event=cancellation,
-                    on_queued_cancel=self.all_enabled_lock.release)
+                    on_queued_cancel=self.all_enabled_lock.release,
+                    execution_class=execution_class)
             except Exception:
                 self.all_enabled_lock.release()
                 raise
             return JobAccepted(job.job_id, command_id=command_id)
-        job = self.runner.submit(command_id, lambda: self._run(source_ids, force=request.force, command_id=command_id,
-                                                                run_id=run_id, started_at=started_at),
-                                 safe_context={"source_id": "multiple"})
+        job = self.runner.submit(command_id, lambda: self._run(
+            source_ids, force=request.force, command_id=command_id, run_id=run_id, started_at=started_at),
+            safe_context={"source_id": "multiple"})
         return JobAccepted(job.job_id, command_id=command_id)
 
     def _run_unified(self, source_ids: tuple[str, ...], *, force: bool, command_id: str, run_id: str,
@@ -169,7 +186,7 @@ class CanonicalCollectionService(CollectionService):
                 if not root.active: continue
                 if cancellation.is_set(): cancelled = True; break
                 try:
-                    outcome = self.manual_service.recheck_url(root.canonical_url,
+                    outcome = self._recheck_manual_isolated(root,
                         requested_by="unified_collection", force=force)
                     status = "failed" if outcome.status == "error" else outcome.status
                     manual_results[root.root_id] = {
@@ -253,13 +270,21 @@ class CanonicalCollectionService(CollectionService):
         source_ids = self._validated_ids((source_id,))
         command_id = f"cmd-{secrets.token_hex(12)}"
         run_id, started_at = generate_run_id(), utc_now_iso()
-        job = self.runner.submit(command_id, lambda: self._run(source_ids, force=force, command_id=command_id,
-                                                                run_id=run_id, started_at=started_at),
-                                 safe_context={"source_id": source_id})
+        job = self.runner.submit(command_id, lambda: self._run(
+            source_ids, force=force, command_id=command_id, run_id=run_id, started_at=started_at),
+            safe_context={"source_id": source_id})
         return JobAccepted(job.job_id, command_id=command_id)
 
     def _run_manual_root(self, root: ManualTrackedRoot, *, requested_by: str, force: bool,
                          run_id: str, started_at: str, command_id: str) -> dict[str, Any]:
+        with self._source_guard(root.root_id):
+            return self._run_manual_root_locked(
+                root, requested_by=requested_by, force=force, run_id=run_id,
+                started_at=started_at, command_id=command_id
+            )
+
+    def _run_manual_root_locked(self, root: ManualTrackedRoot, *, requested_by: str, force: bool,
+                                run_id: str, started_at: str, command_id: str) -> dict[str, Any]:
         capture_started = False
         captured: tuple[tuple[ExternalCTIItem, str], ...] = ()
         if self.exporter is not None and hasattr(self.exporter, "begin_manual_capture"):
@@ -317,6 +342,11 @@ class CanonicalCollectionService(CollectionService):
                 "message": "manual collection completed but export failed safely"}}
         return aggregate
 
+    def _recheck_manual_isolated(self, root: ManualTrackedRoot, *, requested_by: str, force: bool) -> Any:
+        with self._source_guard(root.root_id):
+            return self.manual_service.recheck_url(
+                root.canonical_url, requested_by=requested_by, force=force)
+
     def _validated_ids(self, requested: tuple[str, ...]) -> tuple[str, ...]:
         source_ids = tuple(dict.fromkeys(requested)) if requested else tuple(
             source_id for source_id, source in self.registry.items() if source.enabled
@@ -373,6 +403,10 @@ class CanonicalCollectionService(CollectionService):
         return aggregate
 
     def _execute_isolated(self, source_id: str, *, force: bool, command_id: str) -> SourceExecutionResult:
+        with self._source_guard(source_id):
+            return self._execute_isolated_locked(source_id, force=force, command_id=command_id)
+
+    def _execute_isolated_locked(self, source_id: str, *, force: bool, command_id: str) -> SourceExecutionResult:
         source = self._source(source_id)
         try:
             result = self.executor.execute(source, force=force, command_id=command_id)

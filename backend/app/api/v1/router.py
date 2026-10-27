@@ -1357,7 +1357,8 @@ def _safe_event_title(event: ThreatEvent) -> str:
 def _safe_event_summary(event: ThreatEvent) -> str:
     if event.source_pipeline == "internal":
         return "Internal telemetry event processed by the Central Backend."
-    return event.description[:500]
+    summary = event.description.strip()[:500]
+    return summary or "External threat intelligence event processed by the Central Backend."
 
 
 def _indicator_dict(item: IndicatorRecord, event: ThreatEvent) -> dict[str, Any]:

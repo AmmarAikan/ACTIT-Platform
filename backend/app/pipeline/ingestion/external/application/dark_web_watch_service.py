@@ -412,7 +412,8 @@ class DurableDarkWebScheduler:
                 self.service.store.finish_occurrence(occurrence_id,succeeded=False,failure_category="internal_failure")
                 raise
         try:
-            job=self.runner.submit("cmd-"+secrets.token_hex(12),operation,safe_context={"source_id":watch_id})
+            job=self.runner.submit("cmd-"+secrets.token_hex(12),operation,
+                safe_context={"source_id":watch_id},execution_class="background")
             self.service.store.mark_occurrence_submitted(occurrence_id,job.job_id)
         except Exception:
             self.service.store.finish_occurrence(occurrence_id,succeeded=False,failure_category="internal_failure")

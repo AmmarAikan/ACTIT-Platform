@@ -384,7 +384,7 @@ class CTIRepository:
             )
         )
         if enrichment is None:
-            enrichment = EnrichmentRecord(indicator_id=indicator.id, provider=provider)
+            enrichment = EnrichmentRecord(indicator=indicator, provider=provider)
             self.session.add(enrichment)
         enrichment.data = data
         enrichment.status = status

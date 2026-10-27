@@ -21,8 +21,9 @@ ROOT_TWO = ManualTrackedRoot("manual-root-" + "b" * 32, "https://example.test/re
 
 class ImmediateRunner:
     def __init__(self): self.result = None; self.cancellation_event = None
-    def submit(self, command_id, operation, *, safe_context=None, cancellation_event=None, on_queued_cancel=None):
-        del command_id, safe_context, on_queued_cancel
+    def submit(self, command_id, operation, *, safe_context=None, cancellation_event=None,
+               on_queued_cancel=None, execution_class="interactive"):
+        del command_id, safe_context, on_queued_cancel, execution_class
         self.cancellation_event = cancellation_event
         self.result = operation()
         return SimpleNamespace(job_id="job-unified-000000000001")
@@ -236,6 +237,47 @@ class UnifiedCollectionTests(unittest.TestCase):
         self.assertTrue(ordinary.job_id.startswith("job-"))
         runner.shutdown()
 
+    def test_interactive_source_runs_in_parallel_and_same_source_does_not_overlap(self):
+        background_started, release_background = threading.Event(), threading.Event()
+        interactive_started, release_interactive = threading.Event(), threading.Event()
+        calls = []
+        class PriorityExecutor:
+            def execute(self, source, *, force, command_id):
+                del force, command_id
+                calls.append(source.source_id)
+                if source.source_id == "rss-one":
+                    background_started.set(); release_background.wait(3)
+                elif source.source_id == "dark-one":
+                    interactive_started.set(); release_interactive.wait(3)
+                return SourceExecutionResult(source.source_id, "completed")
+
+        runner = InProcessJobRunner(max_workers=2)
+        service = CanonicalCollectionService(runner, registry(), PriorityExecutor(),
+                                             exporter=UnifiedExporter(), manual_service=ManualService())
+        background = service.start_collection(CollectionRequest(
+            scope="all_enabled", options={"execution_class": "background"}))
+        self.assertTrue(background_started.wait(1))
+
+        interactive = service.collect_source("dark-one", requested_by="ui-analyst")
+        self.assertTrue(interactive_started.wait(1))
+        release_background.set()
+        time.sleep(.05)
+        self.assertEqual(runner.get(background.job_id).state, "running")
+        self.assertEqual(calls.count("dark-one"), 1)
+
+        release_interactive.set()
+        deadline = time.monotonic() + 2
+        while runner.get(interactive.job_id).state not in {"completed", "failed"} and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertEqual(runner.get(interactive.job_id).state, "completed")
+
+        deadline = time.monotonic() + 3
+        while runner.get(background.job_id).state not in {"completed", "failed"} and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertEqual(runner.get(background.job_id).state, "completed")
+        self.assertEqual(calls.count("dark-one"), 2)
+        runner.shutdown()
+
     def test_cancelling_queued_unified_job_releases_run_lock(self):
         occupied, release = threading.Event(), threading.Event()
         runner = InProcessJobRunner(max_workers=1)
@@ -267,7 +309,7 @@ class UnifiedCollectionTests(unittest.TestCase):
         self.assertEqual(accepted.state, "queued")
         self.assertTrue(started.wait(1))
         release.set(); runner.shutdown()
-        self.assertFalse(any(thread.name.startswith("external-api-dev") and thread.is_alive()
+        self.assertFalse(any(thread.name.startswith("external-api-") and thread.is_alive()
                              for thread in threading.enumerate()))
 
 

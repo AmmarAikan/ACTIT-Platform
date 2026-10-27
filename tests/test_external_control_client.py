@@ -322,7 +322,8 @@ class ExternalControlClientTests(unittest.TestCase):
                 "error_count": 0, "source_id": "the-hacker-news", "force": False,
                 "run_id": "ext-run-sanitized-1234567890",
                 "sources": {"the-hacker-news": {"status": "completed", "accepted_records": 3,
-                    "review_records": 1, "rejected_records": 0, "skipped_records": 2, "error_count": 0}},
+                    "review_records": 1, "rejected_records": 0, "skipped_records": 2, "error_count": 0,
+                    "collection_method": "json_collection"}},
                 "export": {"status": "completed", "run_id": "ext-run-sanitized-1234567890",
                     "dataset_sha256": "sha256:" + "a" * 64, "accepted_records": 3,
                     "review_records": 1, "dataset_file": "final_dataset_safe.json",
@@ -338,6 +339,8 @@ class ExternalControlClientTests(unittest.TestCase):
         self.assertEqual(projected["result"]["accepted_records"], 3)
         self.assertEqual(projected["result"]["review_records"], 1)
         self.assertEqual(projected["result"]["skipped_records"], 2)
+        self.assertEqual(projected["result"]["sources"]["the-hacker-news"]["collection_method"],
+                         "json_collection")
         self.assertEqual(projected["result"]["export"]["dataset_sha256"], "a" * 64)
         serialized = json.dumps(projected)
         self.assertNotIn("private.test", serialized)

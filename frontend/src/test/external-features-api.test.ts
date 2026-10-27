@@ -55,25 +55,26 @@ describe('external feature contracts', () => {
     expect((await result as { error: { status: number } }).error).toMatchObject({ status: 408 });
   });
 
-  it('accepts the bounded internal sensor availability state returned by production', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({
-      configured: true,
-      reachable: true,
-      contract_valid: true,
-      hmac_verification: true,
-      availability_state: 'available',
-    }));
-    await expect(api.internalHealth('dionaea')).resolves.toMatchObject({
-      configured: true,
-      reachable: true,
-      availability_state: 'available',
-    });
+  it('accepts the deployed internal health availability projection', async () => {
+    const deployed = { configured: true, reachable: true, contract_valid: true, hmac_verification: true, availability_state: 'available' };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(deployed));
+    await expect(api.internalHealth('dionaea')).resolves.toEqual(deployed);
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({ ...deployed, availability_state: 'available;token=secret' }));
+    await expect(api.internalHealth('dionaea')).rejects.toMatchObject({ status: 502, code: 'invalid_response' });
   });
 
   it('rejects a cancellation response for a different job identity', async () => {
     const body = { schema_version: '1.0', job_id: 'job-other-123456', command_id: 'cmd-1234567890', state: 'cancellation_requested', created_at: '2026-09-07T00:00:00Z', updated_at: '2026-09-07T00:00:01Z', progress: {}, result: null, error: null };
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(body));
     await expect(api.cancelExternalJob('job-requested-1234')).rejects.toMatchObject({ status: 502, code: 'invalid_response' });
+  });
+
+  it('accepts JSON collection jobs returned by manual sources', async () => {
+    const body = { schema_version: '1.0', job_id: 'job-json-1234567890', command_id: 'cmd-json-1234567890', state: 'completed', created_at: '2026-10-18T07:15:05Z', updated_at: '2026-10-18T07:15:06Z', progress: {}, result: { status: 'completed', source_id: 'manual-root-3414416191e234e07ec5516821256e0d', sources: { 'manual-root-3414416191e234e07ec5516821256e0d': { status: 'unchanged', collection_method: 'json_collection', skipped_records: 2 } } }, error: null };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(body));
+    const job = await api.externalJob(body.job_id);
+    expect(job.sources['manual-root-3414416191e234e07ec5516821256e0d'].collection_method).toBe('json_collection');
   });
 
   it('accepts only the strict hashed Dark Web result projection for the requested watch', async () => {
