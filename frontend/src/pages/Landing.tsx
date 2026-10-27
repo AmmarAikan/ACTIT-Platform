@@ -45,7 +45,7 @@ export function Landing() {
             {!user && <Link className="button button-secondary" to="/register">{t('landingRegister')}</Link>}
             <a
               className="button button-quiet github-source-link"
-              href="https://github.com/AmmarAikan/CTI-Tool"
+              href="https://github.com/AmmarAikan/ACTIT-Platform"
               target="_blank"
               rel="noreferrer"
               aria-label={t('githubRepositoryLabel')}

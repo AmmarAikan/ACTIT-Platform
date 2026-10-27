@@ -2,8 +2,8 @@
 
 ## الأسماء العربية المؤكدة
 
-1. علاءالدين الشويع
-2. عمار عيقان
+1. عمار عيقان
+2. علاءالدين الشويع
 3. منيف العميسي
 
 المشرف: الدكتور رائد الذبحاني
@@ -12,9 +12,9 @@
 
 ## الكتابة الإنجليزية المبدئية
 
-- Alaa Aldeen Al-Shuwaie
-- Ammar Aiqan
-- Muneef Al-Omaisi
+- Ammar Aikan
+- Alaaldeen AL-Shuwaie
+- Munif AL-Omisi
 - Dr. Raed Al-Dhabhani
 - University of Science and Technology – Yemen
 

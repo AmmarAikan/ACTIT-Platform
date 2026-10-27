@@ -53,7 +53,7 @@ describe('authentication', () => {
     expect(screen.getByRole('heading', { name: 'من الإشارة المتفرقة إلى قصة تهديد قابلة للتحقق.' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'إنشاء حساب مشاهد' })).toHaveAttribute('href', '/register');
     expect(screen.getByText('الربط والإثراء')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('href', 'https://github.com/AmmarAikan/CTI-Tool');
+    expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('href', 'https://github.com/AmmarAikan/ACTIT-Platform');
     expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('target', '_blank');
     expect(screen.getByRole('link', { name: 'فتح مستودع ACTIT على GitHub في علامة تبويب جديدة' })).toHaveAttribute('rel', 'noreferrer');
   });

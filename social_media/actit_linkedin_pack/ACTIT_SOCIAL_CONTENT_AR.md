@@ -221,7 +221,7 @@ ACTIT integrates bounded multi-source collection, privacy and relevance controls
 
 Our central lesson was clear: useful threat intelligence is not about producing the largest number of alerts or graph edges; it is about preserving provenance, evidence, and reviewability.
 
-Team: Alaa Aldeen Al-Shuwaie, Ammar Aiqan, and Muneef Al-Omaisi.
+Team: Ammar Aikan, Alaaldeen AL-Shuwaie, and Munif AL-Omisi.
 Supervisor: Dr. Raed Al-Dhabhani.
 
 #CyberSecurity #ThreatIntelligence #AI #ACTIT #GraduationProject
