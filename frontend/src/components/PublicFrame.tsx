@@ -3,17 +3,14 @@ import { Link } from 'react-router-dom';
 import { LanguageToggle } from './LanguageToggle';
 import { ThemeToggle } from './ThemeToggle';
 import { useI18n } from '../i18n/I18nContext';
+import { BrandMark } from './BrandMark';
 
 export function PublicHeader() {
   const { t } = useI18n();
   return (
     <header className="public-header">
       <Link className="brand public-brand" to="/" aria-label={t('platform')}>
-        <span className="brand-mark">CTI</span>
-        <span>
-          <strong>ACTIT</strong>
-          <small>{t('brandSub')}</small>
-        </span>
+        <BrandMark withText />
       </Link>
       <div className="public-tools">
         <span className="public-secure-state">
@@ -61,6 +58,10 @@ export function AuthFrame({
           {children}
         </section>
         <aside className="auth-aside">
+          <div className="auth-brand-signature" aria-hidden="true">
+            <BrandMark />
+            <span>ACTIT</span>
+          </div>
           <div className="auth-aside-copy">
             <span className="aside-kicker">{asideEyebrow}</span>
             <h2>{asideTitle}</h2>

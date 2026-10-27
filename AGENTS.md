@@ -1,56 +1,30 @@
-# CTI Tool Repository Instructions
+# ACTIT Project Instructions
 
-## Purpose and ownership
+This is the ACTIT graduation project repository.
 
-This is a shared multi-team Cyber Threat Intelligence repository. External Sources owns collection, extraction of source text and metadata, privacy handling, incremental External state, External-only deduplication, and versioned JSON handoff artifacts.
+For all graduation-project documentation tasks, read and follow:
 
-External Sources does not own Internal Sources, NER, IoC extraction, relation extraction, central persistence, dashboard code, or model training.
+documentation/AGENTS.md
 
-## Important paths
+The actual project implementation is the source of truth.
 
-- `backend/app/pipeline/ingestion/external/`: sole final External Sources implementation.
-- `backend/app/pipeline/common/`: shared contracts; change only after reporting and approval.
-- `backend/app/pipeline/preprocessing/`: approved shared preprocessing; reuse rather than duplicate.
-- `contracts/`: versioned External handoff and integration schemas.
-- `config/`: committed non-secret configuration.
-- `data/external/`: local External runtime state and outputs, not central persistence.
-- `tests/external_sources/`: deterministic External Sources tests.
-- The former top-level `src/` External Sources prototype has been retired. Do not recreate it.
+Production inspection may be performed when required for documentation using:
 
-## Environment and commands
+/opt/cti-platform/releases/20260928T102847Z-ae9bf948/
 
-- Supported Python: 3.11 or newer.
-- Setup: `python -m pip install -r requirements.txt`
-- Full tests: `python -m unittest discover -v`
-- External Phase 0 tests: `python -m unittest discover -s tests/external_sources -p "test_*.py" -v`
-- Compile check: `python -m compileall backend/app/pipeline/ingestion/external`
-- Authorized maintenance entry points must call the same application services as future production adapters.
+and relevant ACTIT resources under:
 
-## Engineering conventions
+/opt/
 
-- Use typed, deterministic, independently testable modules.
-- Use UTC ISO-8601 timestamps ending in `Z`.
-- Use SHA-256 and canonical serialization for persistent identities.
-- Use atomic writes for state and exports.
-- Isolate per-source and per-item failures and record safe errors without secrets.
-- Keep collectors independently configurable and bounded.
-- Never create a second External Sources implementation outside the canonical backend package.
+IMPORTANT:
+Production is READ-ONLY unless the user explicitly authorizes a change.
 
-## Contracts and team boundaries
+Never expose credentials, tokens, passwords, secrets, private keys, or sensitive environment values.
 
-- External connectors implement the shared `ExternalConnector` interface and map accepted items to `RawRecord`.
-- External exports must validate against the versioned schemas under `contracts/`.
-- Required nullable fields remain present.
-- Source-specific fields belong in `metadata`.
-- External deduplication must preserve provenance and must not perform cross-team deduplication.
-- Report any required change to a shared or other-team module before editing it, including affected consumers and compatibility tests.
+For BERT NER documentation and experimental evidence, inspect:
 
-## User interface and prohibited features
+ml/experiments/bert_paper_parity/20260924T000911Z/documentation_package/
 
-The dashboard is the sole production end-user interface. CLI/module access is restricted to development, automated testing, authorized maintenance, diagnostics, and emergency recovery.
+Do not invent technical details, model results, metrics, system behavior, or deployment information.
 
-Do not implement a dashboard, central database, public API during collector phases, Internal Sources, NER, IoC extraction, correlation, enrichment, or model training. Never commit secrets, local onion-source lists, generated datasets, or private browser state.
-
-## Phase definition of done
-
-A phase is complete only when its approved scope is implemented, contracts/configuration and documentation are synchronized, deterministic tests pass, live versus mocked verification is reported honestly, shared-team work is preserved, and work stops before the next phase pending explicit approval.
+Before making major documentation changes, perform an evidence-based audit and present the proposed plan to the user.

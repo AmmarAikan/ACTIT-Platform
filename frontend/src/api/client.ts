@@ -363,6 +363,7 @@ export function clearToken(): void {
 }
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
+export const INTERNAL_HEALTH_TIMEOUT_MS = 45_000;
 export const MANUAL_PREVIEW_TIMEOUT_MS = 180_000;
 const INTERNAL_PULL_TIMEOUT_MS = 120_000;
 
@@ -892,7 +893,7 @@ function parseDashboardSummary(value: unknown): DashboardSummary {
 const JOB_STATES: JobState[] = ['queued', 'running', 'completed', 'partial', 'failed', 'cancellation_requested', 'cancelled'];
 const JOB_COUNT_KEYS = ['accepted_records', 'review_records', 'rejected_records', 'skipped_records', 'error_count'] as const;
 const DISCOVERY_COUNT_KEYS = ['discovered', 'rejected', 'unreachable', 'verified', 'matched', 'new', 'unchanged', 'privacy_blocked', 'errors'] as const;
-const EXTERNAL_COLLECTION_METHODS = ['cert','configured_onion_get','dark_web','hackernews','official_csaf','official_listing','official_rss','reddit','reddit_browser_fallback','reddit_oauth','reddit_public_rss','rss','telegram','vulnerability'] as const;
+const EXTERNAL_COLLECTION_METHODS = ['cert','configured_onion_get','dark_web','hackernews','json_collection','official_csaf','official_listing','official_rss','reddit','reddit_browser_fallback','reddit_oauth','reddit_public_rss','rss','telegram','vulnerability'] as const;
 
 function isPlainObject(value: unknown): value is Record<string, unknown> { return Boolean(value) && typeof value === 'object' && !Array.isArray(value); }
 
@@ -1111,7 +1112,7 @@ export const api = {
   dashboardSummary: async () => parseDashboardSummary(await request<unknown>('/dashboard/summary')),
   systemHealth: async () => parseSystemHealth(await request<unknown>('/health')),
   integrationStatus: async () => parseIntegrationStatus(await request<unknown>('/integrations/status')),
-  internalHealth: async (integration: InternalIntegration) => parseHealth(await request<unknown>(`/integrations/${integration}/health`)),
+  internalHealth: async (integration: InternalIntegration) => parseHealth(await request<unknown>(`/integrations/${integration}/health`, {}, INTERNAL_HEALTH_TIMEOUT_MS)),
   internalEvents: async (integration: InternalIntegration, limit = 25, offset = 0, severity = '') => parseInternalEvents(await request<unknown>(`/internal/sources/${integration}/events?limit=${limit}&offset=${offset}${severity ? `&severity=${encodeURIComponent(severity)}` : ''}`), integration),
   pullInternal: async (integration: InternalIntegration, signal?: AbortSignal) => parsePullResult(await request<unknown>(`/integrations/${integration}/pull`, { method: 'POST', signal }, INTERNAL_PULL_TIMEOUT_MS)),
   intelligenceSearch: async (query: string, limitPerType = 5) => { const normalized = query.trim(); const params = new URLSearchParams({ q: normalized, limit_per_type: String(limitPerType) }); const result = parseIntelligenceSearch(await request<unknown>(`/intelligence/search?${params}`)); if (result.query !== normalized || result.limit_per_type !== limitPerType) throw new ApiError(502, 'invalid_response', 'Search response identity mismatch'); return result; },

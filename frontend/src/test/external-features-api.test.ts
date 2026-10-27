@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, clearToken, MANUAL_PREVIEW_TIMEOUT_MS } from '../api/client';
+import { api, clearToken, INTERNAL_HEALTH_TIMEOUT_MS, MANUAL_PREVIEW_TIMEOUT_MS } from '../api/client';
 
 const response = (body: unknown) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 
@@ -43,10 +43,38 @@ describe('external feature contracts', () => {
     await vi.advanceTimersByTimeAsync(MANUAL_PREVIEW_TIMEOUT_MS - 15_000); expect((await previewResult as { error: { status: number } }).error).toMatchObject({ status: 408 });
   });
 
+  it('allows internal health checks to outlive the backend sensor timeout', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(globalThis, 'fetch').mockImplementation((_input, init) => new Promise((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))));
+    let settled = false;
+    const health = api.internalHealth('dionaea');
+    const result = health.then((value) => ({ value }), (error) => ({ error })).finally(() => { settled = true; });
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(INTERNAL_HEALTH_TIMEOUT_MS - 15_000);
+    expect((await result as { error: { status: number } }).error).toMatchObject({ status: 408 });
+  });
+
+  it('accepts the deployed internal health availability projection', async () => {
+    const deployed = { configured: true, reachable: true, contract_valid: true, hmac_verification: true, availability_state: 'available' };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(deployed));
+    await expect(api.internalHealth('dionaea')).resolves.toEqual(deployed);
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response({ ...deployed, availability_state: 'available;token=secret' }));
+    await expect(api.internalHealth('dionaea')).rejects.toMatchObject({ status: 502, code: 'invalid_response' });
+  });
+
   it('rejects a cancellation response for a different job identity', async () => {
     const body = { schema_version: '1.0', job_id: 'job-other-123456', command_id: 'cmd-1234567890', state: 'cancellation_requested', created_at: '2026-09-07T00:00:00Z', updated_at: '2026-09-07T00:00:01Z', progress: {}, result: null, error: null };
     vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(body));
     await expect(api.cancelExternalJob('job-requested-1234')).rejects.toMatchObject({ status: 502, code: 'invalid_response' });
+  });
+
+  it('accepts JSON collection jobs returned by manual sources', async () => {
+    const body = { schema_version: '1.0', job_id: 'job-json-1234567890', command_id: 'cmd-json-1234567890', state: 'completed', created_at: '2026-10-18T07:15:05Z', updated_at: '2026-10-18T07:15:06Z', progress: {}, result: { status: 'completed', source_id: 'manual-root-3414416191e234e07ec5516821256e0d', sources: { 'manual-root-3414416191e234e07ec5516821256e0d': { status: 'unchanged', collection_method: 'json_collection', skipped_records: 2 } } }, error: null };
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => response(body));
+    const job = await api.externalJob(body.job_id);
+    expect(job.sources['manual-root-3414416191e234e07ec5516821256e0d'].collection_method).toBe('json_collection');
   });
 
   it('accepts only the strict hashed Dark Web result projection for the requested watch', async () => {

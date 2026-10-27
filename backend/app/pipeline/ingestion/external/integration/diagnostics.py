@@ -9,6 +9,7 @@ EXTERNAL_COLLECTION_METHODS = frozenset(
         "configured_onion_get",
         "dark_web",
         "hackernews",
+        "json_collection",
         "official_csaf",
         "official_listing",
         "official_rss",

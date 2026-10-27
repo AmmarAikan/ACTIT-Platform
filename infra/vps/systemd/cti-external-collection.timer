@@ -1,13 +1,12 @@
 [Unit]
-Description=Run the VPS External CTI collection every two hours
+Description=Run the VPS External CTI collection every six hours
 
 [Timer]
 OnBootSec=10min
-OnUnitActiveSec=2h
+OnUnitActiveSec=6h
 RandomizedDelaySec=5min
 Persistent=true
 Unit=cti-external-collection.service
 
 [Install]
 WantedBy=timers.target
-

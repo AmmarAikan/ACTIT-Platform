@@ -21,6 +21,7 @@ configure_test_database(TEST_DATABASE_URL)
 
 from fastapi.testclient import TestClient
 from fastapi.routing import APIRoute
+from sqlalchemy import select
 from stix2 import parse as parse_stix
 from backend.app.api.v1.router import router
 
@@ -29,6 +30,7 @@ from backend.app.core.security import decode_access_token
 from backend.app.db.database import SessionLocal
 from backend.app.db.models import (
     CorrelationRecord,
+    EnrichmentRecord,
     EntityRecord,
     IndicatorRecord,
     RelationshipRecord,
@@ -720,6 +722,13 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(initial.json()["eligible_count"], 1)
         self.assertEqual(initial.json()["pending_count"], 1)
         self.assertEqual(initial.json()["items"][0]["status"], "not_run")
+        self.assertEqual(
+            {
+                item["key"]: item["value"]
+                for item in initial.json()["risk"]["factors"]
+            }["base_severity_or_cvss"],
+            20,
+        )
         self.assertNotIn("raw_reference", initial.text)
 
         confirmation_required = self.client.post(
@@ -767,6 +776,15 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(body["pending_count"], 0)
         self.assertEqual(body["items"][0]["cvss_score"], 9.8)
         self.assertEqual(body["items"][0]["cwes"], ["CWE-79"])
+        self.assertEqual(body["previous_risk_score"], 42)
+        self.assertEqual(
+            {item["key"]: item["value"] for item in body["risk"]["factors"]}[
+                "base_severity_or_cvss"
+            ],
+            39.2,
+        )
+        self.assertEqual(body["risk"]["score"], 50.2)
+        self.assertTrue(body["risk_changed"])
         self.assertEqual(
             body["items"][0]["nvd_url"],
             "https://nvd.nist.gov/vuln/detail/CVE-2026-12345",
@@ -774,6 +792,36 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(body["risk_changed"], body["previous_risk_score"] != body["risk"]["score"])
         for forbidden in ("must-not-be-projected", "private-reference", "references", "vector"):
             self.assertNotIn(forbidden, enriched.text)
+
+        with SessionLocal() as db:
+            stored = db.scalar(
+                select(EnrichmentRecord).where(
+                    EnrichmentRecord.indicator_id == indicator_id,
+                    EnrichmentRecord.provider == "NVD",
+                )
+            )
+            stored_event = db.get(ThreatEvent, event_id)
+            self.assertIsNotNone(stored)
+            self.assertEqual(stored.data["cvss_score"], 9.8)
+            self.assertEqual(stored_event.risk_score, 50.2)
+            self.assertEqual(
+                stored_event.raw_reference["risk_factors"][
+                    "base_severity_or_cvss"
+                ],
+                39.2,
+            )
+
+        repeated = self.client.get(
+            f"/api/v1/intelligence/events/{event_id}/enrichment",
+            headers=self.headers,
+        )
+        repeated_again = self.client.get(
+            f"/api/v1/intelligence/events/{event_id}/enrichment",
+            headers=self.headers,
+        )
+        self.assertEqual(repeated.status_code, 200, repeated.text)
+        self.assertEqual(repeated.json(), repeated_again.json())
+        self.assertEqual(repeated.json()["risk"], body["risk"])
 
         with patch("backend.app.services.pipeline_service.NVDClient.fetch_cve") as fetch_cve:
             duplicate = self.client.post(
@@ -1058,6 +1106,31 @@ class BackendAPITests(unittest.TestCase):
         self.assertEqual(wildcard.json()["returned"], 0)
 
     def test_intelligence_facades_are_bounded_typed_and_sanitized(self) -> None:
+        with SessionLocal() as db:
+            db.add(ThreatEvent(
+                id="empty-summary-regression-event",
+                source_record_id="empty-summary-regression-record",
+                source_type="manual",
+                source_pipeline="external",
+                title="Empty summary regression",
+                description="   ",
+                normalized_text="",
+                risk_score=0,
+                confidence=0,
+                processing_status="transformed",
+            ))
+            db.commit()
+
+        empty_summary = self.client.get(
+            "/api/v1/intelligence/events?search=Empty%20summary%20regression",
+            headers=self.headers,
+        )
+        self.assertEqual(empty_summary.status_code, 200, empty_summary.text)
+        self.assertEqual(
+            empty_summary.json()["items"][0]["summary"],
+            "External threat intelligence event processed by the Central Backend.",
+        )
+
         events = self.client.get(
             "/api/v1/intelligence/events?source_pipeline=internal&limit=1&offset=0",
             headers=self.headers,

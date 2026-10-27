@@ -38,7 +38,8 @@ class IntegrationJob:
 class JobRunner(Protocol):
     def submit(self, command_id: str, operation: Callable[[], Any], *, safe_context: dict[str, str] | None = None,
                cancellation_event: threading.Event | None = None,
-               on_queued_cancel: Callable[[], None] | None = None) -> IntegrationJob: ...
+               on_queued_cancel: Callable[[], None] | None = None,
+               execution_class: str = "interactive") -> IntegrationJob: ...
     def get(self, job_id: str) -> IntegrationJob | None: ...
     def cancel(self, job_id: str) -> IntegrationJob | None: ...
     def list(self, *, limit: int) -> tuple[IntegrationJob, ...]: ...
@@ -48,7 +49,18 @@ class InProcessJobRunner:
     """Development-only memory/thread runner; not durable or cloud-ready."""
 
     def __init__(self, *, max_workers: int = 2) -> None:
-        self._executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="external-api-dev")
+        if max_workers < 1:
+            raise ValueError("max_workers must be at least one")
+        interactive_workers = max_workers - 1 if max_workers > 1 else 1
+        self._interactive_executor = ThreadPoolExecutor(
+            max_workers=interactive_workers, thread_name_prefix="external-api-interactive"
+        )
+        self._background_executor = (
+            ThreadPoolExecutor(max_workers=1, thread_name_prefix="external-api-background")
+            if max_workers > 1 else self._interactive_executor
+        )
+        # Compatibility for lifecycle checks that predate the split executors.
+        self._executor = self._interactive_executor
         self._jobs: dict[str, IntegrationJob] = {}
         self._cancellation_events: dict[str, threading.Event] = {}
         self._queued_cancel_callbacks: dict[str, Callable[[], None]] = {}
@@ -56,14 +68,18 @@ class InProcessJobRunner:
 
     def submit(self, command_id: str, operation: Callable[[], Any], *, safe_context: dict[str, str] | None = None,
                cancellation_event: threading.Event | None = None,
-               on_queued_cancel: Callable[[], None] | None = None) -> IntegrationJob:
+               on_queued_cancel: Callable[[], None] | None = None,
+               execution_class: str = "interactive") -> IntegrationJob:
+        if execution_class not in {"interactive", "background"}:
+            raise ValueError("unsupported execution class")
         source_id = (safe_context or {}).get("source_id")
         job = IntegrationJob(f"job-{secrets.token_hex(12)}", command_id, source_id=source_id)
         with self._lock:
             self._jobs[job.job_id] = job
             if cancellation_event is not None: self._cancellation_events[job.job_id] = cancellation_event
             if on_queued_cancel is not None: self._queued_cancel_callbacks[job.job_id] = on_queued_cancel
-        self._executor.submit(self._run, job.job_id, operation, dict(safe_context or {}))
+        executor = self._background_executor if execution_class == "background" else self._interactive_executor
+        executor.submit(self._run, job.job_id, operation, dict(safe_context or {}))
         return job
 
     def list(self, *, limit: int) -> tuple[IntegrationJob, ...]:
@@ -94,7 +110,9 @@ class InProcessJobRunner:
         return job
 
     def shutdown(self, *, wait: bool = True) -> None:
-        self._executor.shutdown(wait=wait)
+        self._interactive_executor.shutdown(wait=wait)
+        if self._background_executor is not self._interactive_executor:
+            self._background_executor.shutdown(wait=wait)
 
     def _run(self, job_id: str, operation: Callable[[], Any], safe_context: dict[str, str]) -> None:
         with self._lock:

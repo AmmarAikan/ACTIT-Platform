@@ -92,7 +92,7 @@ class ExternalIntegrationImportBoundaryTests(unittest.TestCase):
             external_control_client.COLLECTION_STAGE_PATTERN,
             diagnostics.COLLECTION_STAGE_PATTERN,
         )
-        self.assertEqual(len(diagnostics.EXTERNAL_COLLECTION_METHODS), 14)
+        self.assertEqual(len(diagnostics.EXTERNAL_COLLECTION_METHODS), 15)
         self.assertEqual(diagnostics.DIAGNOSTIC_IDENTIFIER_PATTERN, r"^[A-Za-z][A-Za-z0-9_]{0,99}$")
         self.assertEqual(diagnostics.COLLECTION_STAGE_PATTERN, r"^[a-z][a-z0-9_]{0,63}$")
 

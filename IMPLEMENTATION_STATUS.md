@@ -881,3 +881,35 @@ endpoint and authenticated browser validation can proceed.
 The next normal External collection timer invocation had not yet occurred at
 this checkpoint; it remained scheduled for 2026-09-24 02:05:02 CEST. No manual
 collection or publisher run was triggered.
+
+## External all-enabled TypeError root-cause checkpoint (2026-09-24)
+
+The first correlated post-deployment scheduled failure was accepted and polled
+normally, then failed inside `job_operation` before aggregation or export with
+`TypeError`; Gateway publish, merge, and ACK were not reached. Isolated static
+tracing and deterministic reproduction proved the code-level cause. Production
+composition passed `ExportingManualSourceService` into
+`CanonicalCollectionService` for the unified `all_enabled` path. With an active
+tracked Manual root, the unified coordinator and that wrapper opened nested
+captures on the same `LocalManualRecordSink` thread-local state. The inner
+capture ended first and replaced `captured` with `None`; the outer
+`LocalManualRecordSink.end()` then evaluated `tuple(None)` and raised at
+`backend/app/pipeline/ingestion/external/integration/local.py:288` before source
+aggregation and export preparation.
+
+The development-only candidate changes one composition argument so unified
+collection uses the canonical `manual_delegate` directly, while explicit Manual
+commands retain the existing exporting wrapper. This preserves source
+isolation, the single unified export boundary, job/export contracts, and
+scheduling behavior. A regression test now exercises an actual tracked Manual
+root through the isolated `all_enabled` API lifecycle. It failed with terminal
+`state=failed` before the candidate and passes with collection aggregation and
+export completion after it.
+
+Validation passed 288/288 External Sources tests, including contract tests, and
+478/478 repository Python tests under the project virtual environment. External
+package compile checks and `git diff --check` also passed. No production state,
+service, timer, collection job, Gateway, MISP, PostgreSQL, or deployment was
+changed. The candidate is development-verified but not deployed; External
+Sources remains not production-ready until an explicitly approved deployment
+and one natural scheduled lifecycle verify collection through Gateway ACK.

@@ -3,7 +3,11 @@ from __future__ import annotations
 import unittest
 
 from ml.common.dnrti import BioSplit, audit_split_integrity, unique_unseen_split
-from ml.common.metrics import detailed_entity_metrics, entity_metrics_by_type
+from ml.common.metrics import (
+    detailed_entity_metrics,
+    detailed_token_metrics,
+    entity_metrics_by_type,
+)
 from ml.evaluation.compare_ner_runtimes import compare
 from ml.evaluation.compare_clean_ner_models import compare as compare_clean_models
 from ml.preprocessing.clean_dnrti import build_clean_splits
@@ -154,6 +158,30 @@ class NEREvaluationTests(unittest.TestCase):
         self.assertEqual(detailed["micro"]["entity_true_positives"], 1)
         self.assertEqual(detailed["macro"]["entity_types_with_support"], 2)
         self.assertAlmostEqual(detailed["macro"]["entity_macro_f1"], 0.5)
+
+    def test_token_metrics_separate_all_class_and_o_excluded_views(self) -> None:
+        truth = [["O", "B-HackOrg", "I-HackOrg", "B-Tool"]]
+        predictions = [["O", "B-HackOrg", "O", "B-Org"]]
+
+        detailed = detailed_token_metrics(truth, predictions)
+
+        self.assertEqual(detailed["token_accuracy"], 0.5)
+        self.assertEqual(
+            detailed["all_classes_micro"]["token_true_positives"], 2
+        )
+        self.assertEqual(
+            detailed["excluding_o_micro"]["token_true_positives"], 1
+        )
+        self.assertEqual(
+            detailed["excluding_o_micro"]["token_false_positives"], 1
+        )
+        self.assertEqual(
+            detailed["excluding_o_micro"]["token_false_negatives"], 2
+        )
+
+    def test_token_metrics_reject_misaligned_sequences(self) -> None:
+        with self.assertRaises(ValueError):
+            detailed_token_metrics([["O"]], [["O", "O"]])
 
 
 if __name__ == "__main__":

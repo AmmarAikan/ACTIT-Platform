@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { PublicHeader } from '../components/PublicFrame';
+import { BrandMark } from '../components/BrandMark';
 import { useI18n, type TranslationKey } from '../i18n/I18nContext';
 
 const steps: Array<[string, TranslationKey, TranslationKey]> = [
@@ -30,6 +31,10 @@ export function Landing() {
       <PublicHeader />
       <section className="landing-hero">
         <div className="landing-copy">
+          <div className="landing-brand-signature" aria-hidden="true">
+            <BrandMark />
+            <span><strong>ACTIT</strong><small>AI-ASSISTED CYBER THREAT INTELLIGENCE</small></span>
+          </div>
           <span className="eyebrow">{t('landingEyebrow')}</span>
           <h1>{t('landingTitle')}</h1>
           <p>{t('landingDescription')}</p>

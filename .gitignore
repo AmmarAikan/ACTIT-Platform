@@ -44,6 +44,13 @@ ml/datasets/dnrti_clean_v1/
 checkpoint-*/
 ml/models/**/checkpoint-*/
 
+# BERT paper-parity runtime artifacts (keep small JSON/Markdown/SVG evidence)
+ml/experiments/bert_paper_parity/**/cache/
+ml/experiments/bert_paper_parity/**/alignment_*/model/
+ml/experiments/bert_paper_parity/**/alignment_*/best_model/
+ml/experiments/bert_paper_parity/**/alignment_*/final_model/
+ml/experiments/bert_paper_parity/**/training.log
+
 # Keep sklearn baseline model
 !ml/models/dnrti_sklearn_ner/
 !ml/models/dnrti_sklearn_ner/model.joblib
